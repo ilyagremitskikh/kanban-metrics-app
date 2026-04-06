@@ -16,6 +16,7 @@ import { PredictabilityWidget } from './components/PredictabilityWidget';
 import { AgingWIP } from './components/AgingWIP';
 import { IssuesTable } from './components/IssuesTable';
 import { RiceSection } from './components/RiceSection';
+import { AIAgentTab } from './components/AIAgentTab';
 
 import type { Issue, WorkflowConfig, Settings as SettingsType } from './types';
 
@@ -34,12 +35,13 @@ const DEFAULT_SETTINGS: SettingsType = {
   customJql: '',
 };
 
-type AppTab     = 'metrics' | 'rice' | 'settings';
+type AppTab     = 'metrics' | 'rice' | 'ai' | 'settings';
 type StatusType = 'hidden' | 'info' | 'error' | 'success';
 
 const TABS: { id: AppTab; label: string }[] = [
   { id: 'metrics',  label: 'Метрики' },
   { id: 'rice',     label: 'RICE' },
+  { id: 'ai',       label: '🤖 ИИ-Ассистент' },
   { id: 'settings', label: 'Настройки' },
 ];
 
@@ -106,7 +108,7 @@ export default function App() {
             <div>
               <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight leading-none">Kanban Metrics</h1>
               <div className="text-xs text-gray-500 mt-1.5 tracking-wider font-semibold uppercase">
-                Analytics &nbsp;•&nbsp; RICE
+                Analytics &nbsp;•&nbsp; RICE &nbsp;•&nbsp; AI
               </div>
             </div>
           </div>
@@ -236,6 +238,15 @@ export default function App() {
             onIssuesCountChange={setRiceCount}
           />
         </div>
+
+        {activeTab === 'ai' && (
+          <AIAgentTab
+            issues={issues}
+            metrics={{ ltValues, ctValues, tpWeeks, wipNow, tableData: tableRows }}
+            workflows={workflows}
+            settings={settings}
+          />
+        )}
 
       </div>
     </div>

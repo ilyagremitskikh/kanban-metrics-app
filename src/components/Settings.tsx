@@ -46,16 +46,26 @@ export function Settings({ settings, onChange, onFetch, loading, loadingLabel }:
         </div>
       </div>
 
-      {/* Top row: URL + dates */}
-      <div className="grid grid-cols-1 md:grid-cols-[2fr_140px_140px] gap-3 mb-4">
+      {/* Top row: URLs + dates */}
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_140px_140px] gap-3 mb-4">
         <div>
-          <label className={labelCls}>n8n Webhook URL</label>
+          <label className={labelCls}>Jira Webhook URL</label>
           <input
             type="url"
             className={inputCls}
             value={settings.webhookUrl}
-            placeholder="https://n8n.example.com/webhook/kanban-metrics"
+            placeholder="Webhook для JIRA данных"
             onChange={(e) => set({ webhookUrl: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className={labelCls}>AI Agent Webhook URL</label>
+          <input
+            type="url"
+            className={inputCls}
+            value={settings.aiWebhookUrl || ''}
+            placeholder="https://n8n.example.com/webhook/kanban-ai"
+            onChange={(e) => set({ aiWebhookUrl: e.target.value })}
           />
         </div>
         <div>

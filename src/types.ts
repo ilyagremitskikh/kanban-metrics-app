@@ -60,6 +60,7 @@ export interface WorkflowConfig {
 
 export interface Settings {
   webhookUrl: string;
+  aiWebhookUrl?: string; // Добавлено для ИИ
   dateFrom: string;
   dateTo: string;
   mode: JQLMode;
@@ -89,4 +90,42 @@ export interface CalculatedMetrics {
   tpWeeks: ThroughputWeek[];
   wipNow: number;
   tableData: TableRow[];
+}
+
+export type AIAction = 'calc_wip' | 'find_bottlenecks';
+
+export interface AIWipPayload {
+  action: 'calc_wip';
+  data: {
+    throughputWeekly: number;
+    cycleTimeP50: number;
+    currentSystemWip: number;
+    averageTimeInStatus: Record<string, number>;
+  };
+}
+
+export interface AIBottlenecksPayload {
+  action: 'find_bottlenecks';
+  data: {
+    historicalTiS: Record<string, { p50: number; p85: number }>;
+    currentQueues: Record<string, number>;
+    agingIssues: { key: string; status: string; timeInStatus: number; summary: string }[];
+  };
+}
+
+export interface AIWipResponse {
+  globalLimit: number;
+  limits: Record<string, number>;
+  advice: string;
+}
+
+export interface AIBottlenecksResponse {
+  bottlenecks: string[];
+  agingAlerts: string[];
+  advice: string;
+}
+
+export interface AICache<T> {
+  timestamp: number;
+  data: T;
 }

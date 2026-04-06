@@ -1,0 +1,143 @@
+{
+  "name": "Kanban AI Agent (OpenRouter) V2",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "kanban-ai",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-post",
+      "name": "Webhook POST",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.action }}",
+        "rules": {
+          "rules": [
+            { "value2": "calc_wip" },
+            { "value2": "find_bottlenecks" }
+          ]
+        }
+      },
+      "id": "switch-action",
+      "name": "Switch Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.data) }}",
+        "hasOutputParser": false,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Ты аналитик Kanban-систем. Твоя задача — проанализировать входящие данные метрик и рассчитать оптимальные WIP-лимиты.\n\nПРАВИЛА:\n1. Глобальный WIP-лимит системы рассчитывается по закону Литтла: (throughputWeekly / 7) * cycleTimeP50\n2. Распредели глобальный лимит по статусам пропорционально доле времени, которую задачи проводят в каждом из них (опирайся на ключи averageTimeInStatus).\n3. Округление производи до целых чисел.\n4. Если текущий WIP (currentSystemWip) больше глобального лимита, дай предупреждение в поле advice.\n\nФОРМАТ ВЫВОДА — ТОЛЬКО JSON без markdown:\n{\n  \"globalLimit\": 12,\n  \"limits\": {\n    \"В разработке\": 8,\n    \"Ревью\": 4\n  },\n  \"advice\": \"Здесь твой совет...\"\n}"
+            }
+          ]
+        }
+      },
+      "id": "calc-wip",
+      "name": "Calculate WIP Limits",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [680, 180]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.data) }}",
+        "hasOutputParser": false,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Ты эксперт по анализу потока Kanban. Твоя задача — найти узкие места.\n\nПРАВИЛА:\n1. Очередь: посмотри на currentQueues. Если количество задач в статусе N в несколько раз превышает статус N+1, отметь это.\n2. Аномальное старение: посмотри на agingIssues. Если timeInStatus превышает P85 для этого статуса (из historicalTiS) - это застрявшая задача.\n\nФОРМАТ ВЫВОДА — ТОЛЬКО JSON без markdown:\n{\n  \"bottlenecks\": [\"Статус 1\", \"Статус 2\"],\n  \"agingAlerts\": [\"TASK-123 (Превышение P85...)\"],\n  \"advice\": \"Общий вывод и совет...\"\n}"
+            }
+          ]
+        }
+      },
+      "id": "analyze-bot",
+      "name": "Analyze Bottlenecks",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [680, 440]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4o",
+        "options": { "baseURL": "https://openrouter.ai/api/v1" }
+      },
+      "id": "model-1",
+      "name": "OpenRouter Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [680, 360]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4o",
+        "options": { "baseURL": "https://openrouter.ai/api/v1" }
+      },
+      "id": "model-2",
+      "name": "OpenRouter Model 2",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [680, 620]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "let rawText = $input.item.json.text || '{}';\nif (rawText.startsWith('```json')) {\n  rawText = rawText.replace(/^```json\\n/, '').replace(/\\n```$/, '');\n} else if (rawText.startsWith('```')) {\n  rawText = rawText.replace(/^```\\n/, '').replace(/\\n```$/, '');\n}\ntry {\n  return { json: JSON.parse(rawText) };\n} catch (e) {\n  return { json: { error: \"Parse error\", raw: rawText } };\n}"
+      },
+      "id": "parse-code",
+      "name": "Parse LLM JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1200, 300]
+    }
+  ],
+  "connections": {
+    "Webhook POST": {
+      "main": [ [ { "node": "Switch Action", "type": "main", "index": 0 } ] ]
+    },
+    "Switch Action": {
+      "main": [
+        [ { "node": "Calculate WIP Limits", "type": "main", "index": 0 } ],
+        [ { "node": "Analyze Bottlenecks", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Calculate WIP Limits": {
+      "main": [ [ { "node": "Parse LLM JSON", "type": "main", "index": 0 } ] ]
+    },
+    "Analyze Bottlenecks": {
+      "main": [ [ { "node": "Parse LLM JSON", "type": "main", "index": 0 } ] ]
+    },
+    "OpenRouter Model": {
+      "ai_languageModel": [ [ { "node": "Calculate WIP Limits", "type": "ai_languageModel", "index": 0 } ] ]
+    },
+    "OpenRouter Model 2": {
+      "ai_languageModel": [ [ { "node": "Analyze Bottlenecks", "type": "ai_languageModel", "index": 0 } ] ]
+    },
+    "Parse LLM JSON": {
+      "main": [ [ { "node": "Respond to Webhook", "type": "main", "index": 0 } ] ]
+    }
+  }
+}
