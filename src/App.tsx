@@ -3,14 +3,14 @@ import './App.css';
 
 import { fetchIssues } from './lib/api';
 import { detectWorkflows } from './lib/utils';
-import { buildTableRows, buildThroughputWeeks, getWipNow, getWipByStatus, buildWipRunChart, buildCFD } from './lib/metrics';
+import { buildTableRows, buildThroughputWeeks, getWipNow, getWipByStatus } from './lib/metrics';
 import { useLocalStorage } from './hooks/useLocalStorage';
 
 import { Settings as SettingsPanel } from './components/Settings';
 import { StatusBar } from './components/StatusBar';
 import { StatusConfig } from './components/StatusConfig';
 import { MetricCards } from './components/MetricCards';
-import { ScatterChart, ThroughputChart, WipRunChart, CfdChart } from './components/Charts';
+import { ScatterChart, ThroughputChart } from './components/Charts';
 import { MonteCarlo } from './components/MonteCarlo';
 import { AgingWIP } from './components/AgingWIP';
 import { IssuesTable } from './components/IssuesTable';
@@ -35,7 +35,6 @@ const DEFAULT_SETTINGS: SettingsType = {
 
 type AppTab     = 'metrics' | 'rice' | 'settings';
 type StatusType = 'hidden' | 'info' | 'error' | 'success';
-
 
 const TABS: { id: AppTab; label: string }[] = [
   { id: 'metrics',  label: 'Метрики' },
@@ -92,14 +91,6 @@ export default function App() {
   const wipNow         = hasData ? getWipNow(issues, workflows) : 0;
   const wipByStatus    = hasData ? getWipByStatus(issues, workflows) : {};
   const completedTotal = tableRows.filter((r) => r.completedAt !== null).length;
-  const wipRunData     = hasData ? buildWipRunChart(issues, workflows) : [];
-  const cfdByWorkflow  = hasData ? workflows.map((wf) => ({
-    label: wf.types.join(' / '),
-    statuses: wf.statuses.filter((s) => !['Отменена', 'Архив', 'Установлено'].includes(s)),
-    ltEnd: wf.ltEnd,
-    weeks: buildCFD(issues, wf),
-  })) : [];
-  const [activeCfdWf, setActiveCfdWf] = useState(0);
 
   return (
     <div className="min-h-screen bg-donezo-bg font-sans p-4 md:p-6 lg:p-8 flex items-center justify-center">
@@ -208,43 +199,7 @@ export default function App() {
                     <h3 className="text-sm font-bold text-gray-700 mb-4">Throughput (задач / неделю)</h3>
                     <ThroughputChart weeks={tpWeeks} />
                   </div>
-                  <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-[400px]">
-                    <h3 className="text-sm font-bold text-gray-700 mb-4">WIP (задач в работе / неделю)</h3>
-                    <WipRunChart weeks={wipRunData} />
-                  </div>
                 </div>
-
-                {cfdByWorkflow.length > 0 && (
-                  <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 mb-6">
-                    <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                      <h3 className="text-sm font-bold text-gray-700">Cumulative Flow Diagram</h3>
-                      {cfdByWorkflow.length > 1 && (
-                        <div className="flex gap-1">
-                          {cfdByWorkflow.map((wf, idx) => (
-                            <button
-                              key={idx}
-                              onClick={() => setActiveCfdWf(idx)}
-                              className={`px-3 py-1 text-xs font-semibold rounded-full transition-all ${
-                                activeCfdWf === idx
-                                  ? 'bg-donezo-dark text-white'
-                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                              }`}
-                            >
-                              {wf.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {cfdByWorkflow[activeCfdWf] && (
-                      <CfdChart
-                        weeks={cfdByWorkflow[activeCfdWf].weeks}
-                        statuses={cfdByWorkflow[activeCfdWf].statuses}
-                        ltEnd={cfdByWorkflow[activeCfdWf].ltEnd}
-                      />
-                    )}
-                  </div>
-                )}
 
                 <MonteCarlo issues={issues} workflows={workflows} queuePreset={queuePreset} />
 
