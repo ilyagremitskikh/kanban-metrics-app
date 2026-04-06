@@ -10,8 +10,8 @@ interface Props {
 
 const ISSUE_TYPES = ['User Story', 'Задача', 'Ошибка', 'Техдолг'];
 
-const inputCls = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 bg-white';
-const labelCls = 'block text-xs font-medium text-gray-500 mb-1.5';
+const inputCls = 'w-full px-3 py-2 border border-gray-100 rounded-xl text-sm font-semibold outline-none transition-all duration-200 focus:bg-white focus:border-donezo-primary focus:ring-2 focus:ring-donezo-light bg-gray-50';
+const labelCls = 'block text-xs font-bold text-gray-500 mb-1.5';
 
 export function Settings({ settings, onChange, onFetch, loading, loadingLabel }: Props) {
   const set = (patch: Partial<SettingsType>) => onChange({ ...settings, ...patch });
@@ -25,7 +25,7 @@ export function Settings({ settings, onChange, onFetch, loading, loadingLabel }:
   };
 
   return (
-    <div className="bg-white rounded-xl px-6 py-5 mb-5 shadow-sm">
+    <div className="bg-white rounded-3xl p-6 mb-6 shadow-donezo border border-gray-100">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">Настройки</div>
@@ -33,10 +33,10 @@ export function Settings({ settings, onChange, onFetch, loading, loadingLabel }:
           {(['standard', 'custom'] as JQLMode[]).map((m) => (
             <button
               key={m}
-              className={`px-3.5 py-1 rounded-md text-xs font-semibold cursor-pointer border-none transition ${
+              className={`px-4 py-1.5 rounded-md text-xs font-bold cursor-pointer border-none transition-all duration-200 ${
                 settings.mode === m
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'bg-transparent text-gray-500 hover:text-gray-700'
+                  ? 'bg-white text-donezo-dark shadow-sm'
+                  : 'bg-transparent text-gray-500 hover:text-gray-900'
               }`}
               onClick={() => toggleMode(m)}
             >
@@ -86,10 +86,10 @@ export function Settings({ settings, onChange, onFetch, loading, loadingLabel }:
               {ISSUE_TYPES.map((t) => (
                 <label
                   key={t}
-                  className={`flex items-center gap-1.5 text-xs cursor-pointer px-2.5 py-1.5 rounded-md transition-all border select-none ${
+                  className={`flex items-center gap-1.5 text-xs font-bold cursor-pointer px-3 py-1.5 rounded-full transition-all duration-200 border select-none hover:-translate-y-0.5 ${
                     settings.issueTypes.includes(t)
-                      ? 'bg-blue-50 text-blue-700 border-blue-200 font-medium'
-                      : 'bg-gray-100 text-gray-600 border-transparent hover:bg-gray-200'
+                      ? 'bg-donezo-dark text-white border-donezo-dark shadow-md'
+                      : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-donezo-primary hover:text-donezo-primary hover:bg-donezo-light'
                   }`}
                 >
                   <input
@@ -118,7 +118,7 @@ export function Settings({ settings, onChange, onFetch, loading, loadingLabel }:
           </div>
           <div>
             <button
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold cursor-pointer border-none transition hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed whitespace-nowrap"
+              className="px-6 py-2.5 bg-donezo-dark text-white rounded-full text-sm font-bold shadow-sm cursor-pointer border-none transition-all duration-200 hover:bg-donezo-primary hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none whitespace-nowrap"
               onClick={onFetch}
               disabled={loading}
             >
@@ -140,7 +140,7 @@ export function Settings({ settings, onChange, onFetch, loading, loadingLabel }:
           </div>
           <div className="mt-3">
             <button
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold cursor-pointer border-none transition hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
+              className="px-6 py-2.5 bg-donezo-dark text-white rounded-full text-sm font-bold shadow-sm cursor-pointer border-none transition-all duration-200 hover:bg-donezo-primary hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
               onClick={onFetch}
               disabled={loading}
             >

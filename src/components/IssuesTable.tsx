@@ -9,10 +9,10 @@ interface Props {
 }
 
 function typeBadgeCls(type: string): string {
-  if (type === 'User Story') return 'bg-blue-100 text-blue-800';
-  if (type === 'Ошибка')     return 'bg-red-100 text-red-700';
-  if (type === 'Техдолг')    return 'bg-amber-50 text-amber-700';
-  return 'bg-gray-100 text-gray-600';
+  if (type === 'User Story') return 'bg-donezo-light text-donezo-dark border border-donezo-light';
+  if (type === 'Ошибка')     return 'bg-red-50 text-red-700 border border-red-100';
+  if (type === 'Техдолг')    return 'bg-amber-50 text-amber-700 border border-amber-100';
+  return 'bg-gray-50 text-gray-600 border border-gray-200';
 }
 
 export function IssuesTable({ rows }: Props) {
@@ -40,7 +40,7 @@ export function IssuesTable({ rows }: Props) {
     return dir * String(va).localeCompare(String(vb), 'ru');
   });
 
-  const thCls = 'text-left px-3 py-2.5 bg-gray-50 text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b-2 border-gray-200 cursor-pointer select-none whitespace-nowrap hover:bg-gray-100 transition-colors';
+  const thCls = 'text-left px-3 py-3.5 bg-gray-50/50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b-2 border-gray-100 cursor-pointer select-none whitespace-nowrap hover:bg-gray-100/50 transition-colors duration-200';
 
   const th = (col: SortCol, label: string, extraCls = '') => (
     <th
@@ -53,8 +53,8 @@ export function IssuesTable({ rows }: Props) {
   );
 
   return (
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-5">
-      <div className="px-5 py-4 border-b border-gray-100">
+    <div className="bg-white rounded-3xl shadow-none border border-gray-100 overflow-hidden mb-6 p-2">
+      <div className="px-5 py-4 border-b border-gray-50">
         <h3 className="text-sm font-bold text-gray-700">Задачи ({rows.length})</h3>
       </div>
       <div className="overflow-x-auto">
@@ -72,33 +72,33 @@ export function IssuesTable({ rows }: Props) {
           </thead>
           <tbody>
             {sorted.map((row) => (
-              <tr key={row.key} className="border-b border-gray-100 last:border-none hover:bg-slate-50 transition-colors">
-                <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+              <tr key={row.key} className="border-b border-gray-50 last:border-none hover:bg-donezo-light/30 transition-colors duration-200 group">
+                <td className="px-3 py-3.5 align-middle whitespace-nowrap">
                   <a
                     href={`${JIRA_BASE}/${row.key}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-mono text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline"
+                    className="font-mono text-xs font-bold text-donezo-dark hover:text-donezo-primary hover:underline transition-colors"
                   >
                     {row.key}
                   </a>
                 </td>
-                <td className="px-3 py-2.5 align-middle text-gray-700 min-w-[200px] max-w-[500px]">
+                <td className="px-3 py-3.5 align-middle text-gray-700 min-w-[200px] max-w-[500px] group-hover:text-donezo-dark transition-colors">
                   {row.summary}
                 </td>
-                <td className="px-3 py-2.5 align-middle">
-                  <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${typeBadgeCls(row.type)}`}>
+                <td className="px-3 py-3.5 align-middle">
+                  <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold ${typeBadgeCls(row.type)}`}>
                     {row.type}
                   </span>
                 </td>
-                <td className="px-3 py-2.5 align-middle text-right font-bold text-gray-700 whitespace-nowrap">
+                <td className="px-3 py-3.5 align-middle text-right font-bold text-gray-700 whitespace-nowrap group-hover:text-donezo-dark transition-colors">
                   {row.leadTime !== null ? `${fmtNum(row.leadTime)} d.` : <span className="text-gray-300 font-normal">—</span>}
                 </td>
-                <td className="px-3 py-2.5 align-middle text-right font-bold text-gray-700 whitespace-nowrap">
+                <td className="px-3 py-3.5 align-middle text-right font-bold text-gray-700 whitespace-nowrap group-hover:text-donezo-dark transition-colors">
                   {row.cycleTime !== null ? `${fmtNum(row.cycleTime)} d.` : <span className="text-gray-300 font-normal">—</span>}
                 </td>
-                <td className="px-3 py-2.5 align-middle text-gray-500 whitespace-nowrap">{row.currentStatus}</td>
-                <td className="px-3 py-2.5 align-middle text-gray-500 whitespace-nowrap">
+                <td className="px-3 py-3.5 align-middle text-gray-500 whitespace-nowrap group-hover:text-donezo-dark transition-colors">{row.currentStatus}</td>
+                <td className="px-3 py-3.5 align-middle text-gray-500 whitespace-nowrap group-hover:text-donezo-dark transition-colors">
                   {row.completedAt ? row.completedAt.toLocaleDateString('ru-RU') : <span className="text-gray-300">—</span>}
                 </td>
               </tr>

@@ -6,7 +6,7 @@ interface Props {
   issueCount: number;
 }
 
-const selectCls = 'flex-1 px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm bg-white text-slate-900 outline-none cursor-pointer focus:border-blue-400 transition';
+const selectCls = 'flex-1 px-3 py-2 border border-gray-100 rounded-xl text-sm font-semibold bg-gray-50 text-slate-900 outline-none cursor-pointer transition-all duration-200 focus:bg-white focus:border-donezo-primary focus:ring-2 focus:ring-donezo-light';
 
 export function StatusConfig({ workflows, onChange, issueCount }: Props) {
   const updateWorkflow = (idx: number, patch: Partial<WorkflowConfig>) => {
@@ -15,10 +15,10 @@ export function StatusConfig({ workflows, onChange, issueCount }: Props) {
   };
 
   return (
-    <div className="bg-white rounded-xl px-6 py-5 mb-5 shadow-sm">
+    <div className="bg-white rounded-3xl p-6 mb-6 shadow-donezo border border-gray-100">
       <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Определение метрик</div>
       {workflows.map((wf, idx) => (
-        <div key={idx} className="border border-gray-100 rounded-xl px-4 py-3.5 mb-3 last:mb-0 bg-gray-50/50">
+        <div key={idx} className="border border-gray-100 rounded-2xl px-5 py-4 mb-3 last:mb-0 bg-white shadow-sm">
           <div className="text-xs font-semibold text-gray-500 mb-3">{wf.types.join(', ')}</div>
           {(() => {
             // Include current config values even if they're not in wf.statuses

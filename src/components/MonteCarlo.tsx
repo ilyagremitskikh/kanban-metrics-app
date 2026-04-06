@@ -28,8 +28,8 @@ const PCT_STYLES = {
   p95: { bg: 'bg-red-50',    label: 'text-red-700',   value: 'text-red-900' },
 };
 
-const inputCls = 'px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10';
-const btnPrimary = 'px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold cursor-pointer border-none transition hover:bg-blue-700 whitespace-nowrap';
+const inputCls = 'px-4 py-2 border border-gray-100 bg-gray-50 rounded-xl text-sm font-semibold outline-none transition-all duration-200 focus:bg-white focus:border-donezo-primary focus:ring-2 focus:ring-donezo-light';
+const btnPrimary = 'px-6 py-2.5 bg-donezo-dark text-white rounded-full text-sm font-bold cursor-pointer border-none transition-all duration-200 hover:bg-donezo-primary hover:-translate-y-0.5 hover:shadow-lg whitespace-nowrap';
 
 export function MonteCarlo({ issues, workflows, queuePreset }: Props) {
   const [mode, setMode]             = useState<MCMode>('items');
@@ -139,7 +139,7 @@ export function MonteCarlo({ issues, workflows, queuePreset }: Props) {
     setQueueItems((p) => p.map((x, j) => (j === i ? v : x)));
 
   return (
-    <div className="bg-white rounded-xl px-6 py-5 mb-5 shadow-sm">
+    <div className="bg-white rounded-3xl p-6 mb-6 shadow-donezo border border-gray-100">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
         <div>
@@ -150,8 +150,8 @@ export function MonteCarlo({ issues, workflows, queuePreset }: Props) {
           {(['items', 'date', 'queue'] as MCMode[]).map((m) => (
             <button
               key={m}
-              className={`px-4 py-1.5 rounded-lg text-sm font-semibold cursor-pointer border-none transition whitespace-nowrap ${
-                mode === m ? 'bg-white text-slate-900 shadow-sm' : 'bg-transparent text-gray-500 hover:text-gray-700'
+              className={`px-4 py-1.5 rounded-md text-sm font-bold cursor-pointer border-none transition-all duration-200 whitespace-nowrap ${
+                mode === m ? 'bg-white text-donezo-dark shadow-sm' : 'bg-transparent text-gray-500 hover:text-gray-900'
               }`}
               onClick={() => switchMode(m)}
             >
@@ -250,7 +250,7 @@ export function MonteCarlo({ issues, workflows, queuePreset }: Props) {
                     placeholder={`Задача ${idx + 1}`}
                     value={item}
                     onChange={(e) => updateQueueItem(idx, e.target.value)}
-                    className="flex-1 px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-400 transition"
+                    className="flex-1 px-3 py-2 border border-gray-100 bg-gray-50 rounded-xl text-sm font-semibold outline-none focus:bg-white focus:border-donezo-primary focus:ring-2 focus:ring-donezo-light transition-all duration-200"
                   />
                   {queueItems.length > 1 && (
                     <button
@@ -263,7 +263,7 @@ export function MonteCarlo({ issues, workflows, queuePreset }: Props) {
             </div>
             <div className="flex items-center gap-2.5">
               <button
-                className="bg-transparent border border-dashed border-gray-300 rounded-lg px-3.5 py-1.5 text-xs text-gray-500 cursor-pointer hover:border-blue-400 hover:text-blue-500 transition"
+                className="bg-transparent border border-dashed border-gray-300 rounded-full px-5 py-2 text-xs font-bold text-gray-500 cursor-pointer hover:border-donezo-primary hover:text-donezo-primary hover:-translate-y-0.5 transition-all duration-200"
                 onClick={addQueueItem}
               >+ задача</button>
               <button className={btnPrimary} onClick={run}>Рассчитать</button>
@@ -294,12 +294,12 @@ export function MonteCarlo({ issues, workflows, queuePreset }: Props) {
                   </thead>
                   <tbody>
                     {queueResult.map((row, idx) => (
-                      <tr key={idx} className="border-b border-gray-100 last:border-none hover:bg-gray-50">
-                        <td className="text-gray-400 text-xs font-bold text-center py-2.5 pr-3 align-middle">{idx + 1}</td>
-                        <td className="text-slate-900 font-medium py-2.5 pr-3 align-middle">{row.name}</td>
-                        <td className="text-blue-700 font-semibold whitespace-nowrap py-2.5 pr-3 align-middle">{fmtShort(row.p50)}</td>
-                        <td className="text-amber-700 font-semibold whitespace-nowrap py-2.5 pr-3 align-middle">{fmtShort(row.p85)}</td>
-                        <td className="text-red-700 font-semibold whitespace-nowrap py-2.5 align-middle">{fmtShort(row.p95)}</td>
+                      <tr key={idx} className="border-b border-gray-50 last:border-none hover:bg-donezo-light/30 transition-colors duration-200 group">
+                        <td className="text-gray-400 text-xs font-bold text-center py-3.5 pr-3 align-middle group-hover:text-donezo-dark transition-colors">{idx + 1}</td>
+                        <td className="text-slate-900 font-bold py-3.5 pr-3 align-middle">{row.name}</td>
+                        <td className="text-blue-700 font-semibold whitespace-nowrap py-3.5 pr-3 align-middle">{fmtShort(row.p50)}</td>
+                        <td className="text-amber-700 font-semibold whitespace-nowrap py-3.5 pr-3 align-middle">{fmtShort(row.p85)}</td>
+                        <td className="text-red-700 font-semibold whitespace-nowrap py-3.5 align-middle">{fmtShort(row.p95)}</td>
                       </tr>
                     ))}
                   </tbody>

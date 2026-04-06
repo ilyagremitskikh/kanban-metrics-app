@@ -17,11 +17,11 @@ interface TimeCardProps {
 
 function TimeCard({ title, tooltip, values }: TimeCardProps) {
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm">
+    <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100">
       <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
         {title} <Tooltip text={tooltip} />
       </div>
-      <div className="text-[38px] font-extrabold text-slate-900 leading-none tracking-tight">{fmtNum(mean(values))}</div>
+      <div className="text-[38px] font-extrabold text-donezo-dark leading-none tracking-tight">{fmtNum(mean(values))}</div>
       <div className="text-xs text-gray-400 mt-1 mb-3.5">среднее, дней</div>
       <div className="grid grid-cols-2 gap-x-3 gap-y-2">
         <div>
@@ -69,12 +69,12 @@ export function MetricCards({ ltValues, ctValues, tpWeeks, wipByStatus, wipNow, 
         tooltip="Время активной работы: от момента, когда задача взята в работу, до завершения. Не включает ожидание в очереди. Отражает реальную производительность команды."
         values={ctValues}
       />
-      <div className="bg-white rounded-xl p-5 shadow-sm">
+      <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100">
         <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
           WIP (сейчас){' '}
           <Tooltip text="Work in Progress — задачи в работе, не достигшие финального статуса. По закону Литтла: Lead Time = WIP ÷ Throughput. Высокий WIP замедляет доставку." />
         </div>
-        <div className="text-[38px] font-extrabold text-slate-900 leading-none tracking-tight">{wipNow}</div>
+        <div className="text-[38px] font-extrabold text-donezo-dark leading-none tracking-tight">{wipNow}</div>
         <div className="text-xs text-gray-400 mt-1 mb-3.5">задач в работе</div>
         {Object.keys(wipByStatus).length > 0 && (
           <div className="space-y-1">
@@ -89,12 +89,12 @@ export function MetricCards({ ltValues, ctValues, tpWeeks, wipByStatus, wipNow, 
           </div>
         )}
       </div>
-      <div className="bg-white rounded-xl p-5 shadow-sm">
+      <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100">
         <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
           Throughput{' '}
           <Tooltip text="Производительность команды: сколько задач завершается за неделю. Стабильный Throughput — признак предсказуемого потока. Используйте для прогнозирования сроков." />
         </div>
-        <div className="text-[38px] font-extrabold text-slate-900 leading-none tracking-tight">{fmtNum(mean(tpValues))}</div>
+        <div className="text-[38px] font-extrabold text-donezo-dark leading-none tracking-tight">{fmtNum(mean(tpValues))}</div>
         <div className="text-xs text-gray-400 mt-1 mb-3.5">среднее задач / нед.</div>
         <div className="grid grid-cols-2 gap-x-3 gap-y-2">
           <div>

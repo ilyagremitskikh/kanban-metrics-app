@@ -166,19 +166,19 @@ export function AgingWIP({ issues, workflows, ctValues }: Props) {
       </div>
 
       <button
-        className="mt-4 bg-transparent border border-gray-200 rounded-lg px-4 py-1.5 text-xs font-semibold text-gray-500 cursor-pointer transition hover:bg-gray-50"
+        className="mt-4 bg-transparent border border-gray-100 rounded-full px-5 py-2 text-xs font-bold text-gray-500 cursor-pointer transition-all duration-200 hover:bg-donezo-light hover:text-donezo-dark hover:border-donezo-primary hover:-translate-y-0.5 shadow-sm"
         onClick={() => setShowTable((v) => !v)}
       >
         {showTable ? '▲ Скрыть детали' : `▼ Детали WIP (${aged.length} задач)`}
       </button>
 
       {showTable && (
-        <div className="mt-3 overflow-x-auto rounded-xl border border-gray-200">
+        <div className="mt-3 overflow-x-auto rounded-3xl border border-gray-100 shadow-none p-2">
           <table className="w-full border-collapse text-xs">
             <thead>
               <tr>
                 {['Задача', 'Тип', 'Текущий статус', 'Дней в работе', 'vs P50', 'vs P85'].map((h) => (
-                  <th key={h} className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b-2 border-gray-200 bg-gray-50 whitespace-nowrap">
+                  <th key={h} className="px-3 py-3.5 text-left text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b-2 border-gray-100 bg-gray-50/50 whitespace-nowrap">
                     {h}
                   </th>
                 ))}
@@ -191,25 +191,25 @@ export function AgingWIP({ issues, workflows, ctValues }: Props) {
                   : ctP85 !== null && i.age <= ctP85 ? 'yellow'
                   : 'red';
                 return (
-                  <tr key={i.key} className={`border-b border-gray-100 last:border-none hover:bg-gray-50 transition-colors wip-row-${color}`}>
-                    <td className="px-3 py-2.5 align-top">
+                  <tr key={i.key} className={`border-b border-gray-50 last:border-none hover:bg-donezo-light/30 transition-colors duration-200 group wip-row-${color}`}>
+                    <td className="px-3 py-3.5 align-top">
                       <a
                         href={`${JIRA_BASE}/${i.key}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-mono font-bold text-blue-600 hover:text-blue-800 hover:underline mr-2 whitespace-nowrap"
+                        className="font-mono font-bold text-donezo-dark hover:text-donezo-primary hover:underline transition-colors mr-2 whitespace-nowrap"
                       >
                         {i.key}
                       </a>
-                      <span className="text-gray-500">{i.summary}</span>
+                      <span className="text-gray-500 group-hover:text-donezo-dark transition-colors">{i.summary}</span>
                     </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap">
-                      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700">{i.type}</span>
+                    <td className="px-3 py-3.5 whitespace-nowrap">
+                      <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-donezo-light text-donezo-dark border border-donezo-light">{i.type}</span>
                     </td>
-                    <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{i.currentStatus}</td>
-                    <td className="px-3 py-2.5 font-bold whitespace-nowrap">{fmtNum(i.age)}d.</td>
-                    <td className={`px-3 py-2.5 whitespace-nowrap ${deltaClass(i.age, ctP50)}`}>{deltaLabel(i.age, ctP50)}</td>
-                    <td className={`px-3 py-2.5 whitespace-nowrap ${deltaClass(i.age, ctP85)}`}>{deltaLabel(i.age, ctP85)}</td>
+                    <td className="px-3 py-3.5 text-gray-600 whitespace-nowrap group-hover:text-donezo-dark transition-colors">{i.currentStatus}</td>
+                    <td className="px-3 py-3.5 font-bold whitespace-nowrap group-hover:text-donezo-dark transition-colors">{fmtNum(i.age)}d.</td>
+                    <td className={`px-3 py-3.5 whitespace-nowrap ${deltaClass(i.age, ctP50)} group-hover:text-donezo-dark transition-colors`}>{deltaLabel(i.age, ctP50)}</td>
+                    <td className={`px-3 py-3.5 whitespace-nowrap ${deltaClass(i.age, ctP85)} group-hover:text-donezo-dark transition-colors`}>{deltaLabel(i.age, ctP85)}</td>
                   </tr>
                 );
               })}

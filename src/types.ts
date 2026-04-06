@@ -32,6 +32,19 @@ export interface ThroughputWeek {
   count: number;
 }
 
+export interface WipWeek {
+  /** ISO Monday date string */
+  date: string;
+  count: number;
+}
+
+export interface CfdWeek {
+  /** ISO Monday date string */
+  date: string;
+  /** status name → cumulative number of issues that have ever entered this status by this week */
+  counts: Record<string, number>;
+}
+
 export type JQLMode = 'standard' | 'custom';
 export type MCMode = 'items' | 'date' | 'queue';
 export type SortDir = 'asc' | 'desc';

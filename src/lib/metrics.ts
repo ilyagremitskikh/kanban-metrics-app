@@ -1,4 +1,4 @@
-import type { Issue, TableRow, ThroughputWeek, WorkflowConfig } from '../types';
+import type { Issue, TableRow, ThroughputWeek, WipWeek, CfdWeek, WorkflowConfig } from '../types';
 import { toMonday, isNonDoneTerminal } from './utils';
 
 export function getWorkflowForIssue(
@@ -215,4 +215,178 @@ export function getWipNow(
     const wf = getWorkflowForIssue(i, workflows);
     return wf ? isWipIssue(i, wf) : false;
   }).length;
+}
+
+// ─── WIP Run Chart ────────────────────────────────────────────────────────────
+
+/**
+ * Returns the status name of an issue at a given point in time.
+ * Uses the last transition that started at or before `atTime`.
+ * Returns null if the issue had no transitions before atTime (didn't exist yet).
+ */
+export function getStatusAtTime(issue: Issue, atTime: number): string | null {
+  const sorted = [...issue.transitions]
+    .filter((t) => new Date(t.enteredAt).getTime() <= atTime)
+    .sort((a, b) => new Date(b.enteredAt).getTime() - new Date(a.enteredAt).getTime());
+  return sorted.length > 0 ? sorted[0].status : null;
+}
+
+/**
+ * Builds a weekly WIP snapshot series.
+ * X-axis range: from the earliest ctStart of any issue to the latest ltEnd (or today).
+ * A task is counted as WIP at time T if:
+ *   1. It entered ctStart at or before T
+ *   2. It has NOT yet entered ltEnd at T (or never reached ltEnd)
+ *   3. Its status at time T is not a NON_DONE_TERMINAL status
+ */
+export function buildWipRunChart(
+  issues: Issue[],
+  workflows: WorkflowConfig[],
+): WipWeek[] {
+  if (!issues.length || !workflows.length) return [];
+
+  // Find range: earliest ctStart → latest ltEnd (or now)
+  let rangeStartMs = Infinity;
+  let rangeEndMs   = -Infinity;
+
+  for (const issue of issues) {
+    const wf = getWorkflowForIssue(issue, workflows);
+    if (!wf) continue;
+    for (const t of issue.transitions) {
+      if (t.status === wf.ctStart) {
+        const ms = new Date(t.enteredAt).getTime();
+        if (ms < rangeStartMs) rangeStartMs = ms;
+      }
+      if (t.status === wf.ltEnd) {
+        const ms = new Date(t.enteredAt).getTime();
+        if (ms > rangeEndMs) rangeEndMs = ms;
+      }
+    }
+  }
+
+  if (!isFinite(rangeStartMs)) return [];
+  // If no ltEnd found at all, range ends at today
+  if (!isFinite(rangeEndMs)) rangeEndMs = Date.now();
+
+  const weeks: WipWeek[] = [];
+  const cur = toMonday(new Date(rangeStartMs));
+  const last = toMonday(new Date(rangeEndMs));
+
+  while (cur <= last) {
+    // Snapshot: Sunday 23:59:59 of this week
+    const sunday = new Date(cur);
+    sunday.setDate(sunday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+    const atTime = sunday.getTime();
+
+    let count = 0;
+    for (const issue of issues) {
+      const wf = getWorkflowForIssue(issue, workflows);
+      if (!wf) continue;
+
+      // When did the issue first enter ctStart?
+      const ctStartTs = issue.transitions
+        .filter((t) => t.status === wf.ctStart)
+        .map((t) => new Date(t.enteredAt).getTime());
+      if (!ctStartTs.length) continue;
+      const firstCtStart = Math.min(...ctStartTs);
+      if (firstCtStart > atTime) continue; // not yet in work
+
+      // Has the issue reached ltEnd by atTime?
+      const ltEndTs = issue.transitions
+        .filter((t) => t.status === wf.ltEnd)
+        .map((t) => new Date(t.enteredAt).getTime());
+      const firstLtEnd = ltEndTs.length ? Math.min(...ltEndTs) : Infinity;
+      if (firstLtEnd <= atTime) continue; // already done
+
+      // Is the issue's status at atTime a terminal non-delivery status?
+      const statusAtT = getStatusAtTime(issue, atTime);
+      if (statusAtT && ['Отменена', 'Архив', 'Установлено'].includes(statusAtT)) continue;
+
+      count++;
+    }
+
+    weeks.push({ date: cur.toISOString().slice(0, 10), count });
+    cur.setDate(cur.getDate() + 7);
+  }
+
+  return weeks;
+}
+
+// ─── Cumulative Flow Diagram ──────────────────────────────────────────────────
+
+/**
+ * Builds a weekly Cumulative Flow Diagram for a single workflow.
+ * For each week's Monday, counts how many issues have EVER entered each status up to Sunday 23:59:59.
+ * Only statuses present in workflow.statuses are included (preserves their order).
+ * Excludes NON_DONE_TERMINAL statuses from the status list.
+ */
+export function buildCFD(
+  issues: Issue[],
+  workflow: WorkflowConfig,
+): CfdWeek[] {
+  // Filter issues that belong to this workflow
+  const wfIssues = issues.filter((i) => workflow.types.includes(i.type));
+  if (!wfIssues.length) return [];
+
+  // Statuses to display: only those in workflow.statuses order, excluding terminals
+  const NON_DONE_TERMINAL_SET = new Set(['Отменена', 'Архив', 'Установлено']);
+  const displayStatuses = workflow.statuses.filter((s) => !NON_DONE_TERMINAL_SET.has(s));
+
+  // Build a pre-index: for each issue, map status → earliest enteredAt timestamp
+  // (We count cumulative "first arrival" — how many issues ever touched this status)
+  type IssueStatusMap = Map<string, number>; // status → first-entry-ms
+  const issueStatusMaps: IssueStatusMap[] = wfIssues.map((issue) => {
+    const map: IssueStatusMap = new Map();
+    for (const t of issue.transitions) {
+      const ms = new Date(t.enteredAt).getTime();
+      const prev = map.get(t.status);
+      if (prev === undefined || ms < prev) {
+        map.set(t.status, ms);
+      }
+    }
+    return map;
+  });
+
+  // Find range: from earliest first transition to latest first ltEnd (or today)
+  let rangeStartMs = Infinity;
+  let rangeEndMs   = -Infinity;
+  for (const map of issueStatusMaps) {
+    for (const ms of map.values()) {
+      if (ms < rangeStartMs) rangeStartMs = ms;
+      if (ms > rangeEndMs)   rangeEndMs   = ms;
+    }
+  }
+  if (!isFinite(rangeStartMs)) return [];
+  if (!isFinite(rangeEndMs)) rangeEndMs = Date.now();
+
+  const result: CfdWeek[] = [];
+  const cur = toMonday(new Date(rangeStartMs));
+  const last = toMonday(new Date(rangeEndMs));
+
+  while (cur <= last) {
+    const sunday = new Date(cur);
+    sunday.setDate(sunday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+    const atTime = sunday.getTime();
+
+    const counts: Record<string, number> = {};
+    for (const status of displayStatuses) {
+      counts[status] = 0;
+    }
+
+    for (const map of issueStatusMaps) {
+      for (const status of displayStatuses) {
+        const firstEntry = map.get(status);
+        if (firstEntry !== undefined && firstEntry <= atTime) {
+          counts[status]++;
+        }
+      }
+    }
+
+    result.push({ date: cur.toISOString().slice(0, 10), counts });
+    cur.setDate(cur.getDate() + 7);
+  }
+
+  return result;
 }
