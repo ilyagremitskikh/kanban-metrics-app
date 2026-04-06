@@ -216,3 +216,123 @@ export function getWipNow(
     return wf ? isWipIssue(i, wf) : false;
   }).length;
 }
+
+// ─── Predictability Score ─────────────────────────────────────────────────────
+
+export interface PredictabilityPoint {
+  date: string;   // ISO week date (Monday)
+  score: number;  // 0–100
+  cv: number;
+  n: number;      // sample size
+}
+
+export interface PredictabilityResult {
+  /** Current score 0–100 (based on last rollingWeeks window) */
+  score: number;
+  /** Standard deviation of CT in the current window */
+  stdDev: number;
+  /** Mean CT in the current window */
+  meanCT: number;
+  /** Raw CV = stdDev / mean */
+  cv: number;
+  /** % of issues that completed within their P85 SLE in the current window */
+  sleHitRate: number;
+  /** Rolling history for sparkline */
+  history: PredictabilityPoint[];
+  /** Sample size used for current score */
+  n: number;
+}
+
+/**
+ * Calculates the Predictability Score using a rolling window of Cycle Time values.
+ *
+ * Formula: score = max(0, 1 - CV) * 100
+ * where   CV = stdDev(CT) / mean(CT)
+ *
+ * History: for each completed week present in the data, we take all CT values
+ * from the previous `rollingWeeks` weeks and compute the score for that window.
+ *
+ * @param rows        - completed TableRows (completedAt + cycleTime must be non-null)
+ * @param p85         - P85 cycle time value (for SLE hit-rate)
+ * @param rollingWeeks - rolling window size (default 12 weeks ≈ 3 months)
+ */
+export function calcPredictabilityHistory(
+  rows: TableRow[],
+  p85: number | null,
+  rollingWeeks = 12,
+): PredictabilityResult | null {
+  // Filter rows that have both completedAt and cycleTime
+  const valid = rows
+    .filter((r) => r.completedAt !== null && r.cycleTime !== null)
+    .map((r) => ({ completedAt: r.completedAt as Date, ct: r.cycleTime as number }))
+    .sort((a, b) => a.completedAt.getTime() - b.completedAt.getTime());
+
+  if (valid.length < 2) return null;
+
+  // Collect unique week anchors (Mondays) present in the data
+  const weekSet = new Set<string>();
+  for (const { completedAt } of valid) {
+    const mon = new Date(completedAt);
+    mon.setDate(completedAt.getDate() - ((completedAt.getDay() + 6) % 7));
+    mon.setHours(0, 0, 0, 0);
+    weekSet.add(mon.toISOString().slice(0, 10));
+  }
+  const weeks = [...weekSet].sort();
+
+  const windowMs = rollingWeeks * 7 * 24 * 60 * 60 * 1000;
+
+  const history: PredictabilityPoint[] = [];
+  for (const weekStr of weeks) {
+    const windowEnd   = new Date(weekStr);
+    windowEnd.setDate(windowEnd.getDate() + 6);
+    windowEnd.setHours(23, 59, 59, 999);
+    const windowStart = new Date(windowEnd.getTime() - windowMs);
+
+    const window = valid
+      .filter((r) => r.completedAt >= windowStart && r.completedAt <= windowEnd)
+      .map((r) => r.ct);
+
+    if (window.length < 2) continue;
+
+    const mean   = window.reduce((s, v) => s + v, 0) / window.length;
+    const variance = window.reduce((s, v) => s + (v - mean) ** 2, 0) / window.length;
+    const stdDev = Math.sqrt(variance);
+    const cv     = mean > 0 ? stdDev / mean : 1;
+    // Cycle Time часто имеет экстремальные выбросы, из-за чего CV регулярно > 1
+    // Используем более мягкую функцию (100 - CV * 25), чтобы CV=1 давало 75%, а CV=2 давало 50%
+    const score  = Math.max(0, Math.round(100 - cv * 25));
+
+    history.push({ date: weekStr, score, cv: Math.round(cv * 100) / 100, n: window.length });
+  }
+
+  if (!history.length) return null;
+
+  // Current score = last point in history
+  const last = history[history.length - 1];
+
+  // Current window for detailed stats
+  const nowEnd   = new Date(valid[valid.length - 1].completedAt);
+  const nowStart = new Date(nowEnd.getTime() - windowMs);
+  const currentWindow = valid
+    .filter((r) => r.completedAt >= nowStart && r.completedAt <= nowEnd)
+    .map((r) => r.ct);
+
+  const mean   = currentWindow.reduce((s, v) => s + v, 0) / currentWindow.length;
+  const variance = currentWindow.reduce((s, v) => s + (v - mean) ** 2, 0) / currentWindow.length;
+  const stdDev = Math.sqrt(variance);
+
+  // SLE Hit Rate: % of items in current window that finished ≤ P85
+  const sleHitRate = p85 !== null
+    ? Math.round((currentWindow.filter((ct) => ct <= p85).length / currentWindow.length) * 100)
+    : 0;
+
+  return {
+    score: last.score,
+    stdDev: Math.round(stdDev * 10) / 10,
+    meanCT: Math.round(mean * 10) / 10,
+    cv: last.cv,
+    sleHitRate,
+    history,
+    n: last.n,
+  };
+}

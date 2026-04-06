@@ -3,6 +3,7 @@ import { Chart, registerables } from 'chart.js';
 import { percentile, fmtNum } from '../lib/utils';
 import { getWorkflowForIssue, isWipIssue } from '../lib/metrics';
 import type { Issue, WorkflowConfig } from '../types';
+import { TypeBadge, StatusBadge } from './Badges';
 
 Chart.register(...registerables);
 
@@ -174,11 +175,11 @@ export function AgingWIP({ issues, workflows, ctValues }: Props) {
 
       {showTable && (
         <div className="mt-3 overflow-x-auto rounded-3xl border border-gray-100 shadow-none p-2">
-          <table className="w-full border-collapse text-xs">
+          <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
                 {['Задача', 'Тип', 'Текущий статус', 'Дней в работе', 'vs P50', 'vs P85'].map((h) => (
-                  <th key={h} className="px-3 py-3.5 text-left text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b-2 border-gray-100 bg-gray-50/50 whitespace-nowrap">
+                  <th key={h} className="px-3 py-3.5 text-left text-xs font-bold uppercase tracking-widest text-gray-400 border-b-2 border-gray-100 bg-gray-50/50 whitespace-nowrap">
                     {h}
                   </th>
                 ))}
@@ -204,9 +205,11 @@ export function AgingWIP({ issues, workflows, ctValues }: Props) {
                       <span className="text-gray-500 group-hover:text-donezo-dark transition-colors">{i.summary}</span>
                     </td>
                     <td className="px-3 py-3.5 whitespace-nowrap">
-                      <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-donezo-light text-donezo-dark border border-donezo-light">{i.type}</span>
+                      <TypeBadge type={i.type} />
                     </td>
-                    <td className="px-3 py-3.5 text-gray-600 whitespace-nowrap group-hover:text-donezo-dark transition-colors">{i.currentStatus}</td>
+                    <td className="px-3 py-3.5 whitespace-nowrap">
+                      <StatusBadge status={i.currentStatus} />
+                    </td>
                     <td className="px-3 py-3.5 font-bold whitespace-nowrap group-hover:text-donezo-dark transition-colors">{fmtNum(i.age)}d.</td>
                     <td className={`px-3 py-3.5 whitespace-nowrap ${deltaClass(i.age, ctP50)} group-hover:text-donezo-dark transition-colors`}>{deltaLabel(i.age, ctP50)}</td>
                     <td className={`px-3 py-3.5 whitespace-nowrap ${deltaClass(i.age, ctP85)} group-hover:text-donezo-dark transition-colors`}>{deltaLabel(i.age, ctP85)}</td>

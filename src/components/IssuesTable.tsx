@@ -1,18 +1,12 @@
 import { useState } from 'react';
 import { fmtNum } from '../lib/utils';
 import type { TableRow, SortState, SortCol } from '../types';
+import { TypeBadge, StatusBadge } from './Badges';
 
 const JIRA_BASE = 'https://jira.tochka.com/browse';
 
 interface Props {
   rows: TableRow[];
-}
-
-function typeBadgeCls(type: string): string {
-  if (type === 'User Story') return 'bg-donezo-light text-donezo-dark border border-donezo-light';
-  if (type === 'Ошибка')     return 'bg-red-50 text-red-700 border border-red-100';
-  if (type === 'Техдолг')    return 'bg-amber-50 text-amber-700 border border-amber-100';
-  return 'bg-gray-50 text-gray-600 border border-gray-200';
 }
 
 export function IssuesTable({ rows }: Props) {
@@ -40,7 +34,7 @@ export function IssuesTable({ rows }: Props) {
     return dir * String(va).localeCompare(String(vb), 'ru');
   });
 
-  const thCls = 'text-left px-3 py-3.5 bg-gray-50/50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b-2 border-gray-100 cursor-pointer select-none whitespace-nowrap hover:bg-gray-100/50 transition-colors duration-200';
+  const thCls = 'text-left px-3 py-3.5 bg-gray-50/50 text-xs font-bold text-gray-400 uppercase tracking-wider border-b-2 border-gray-100 cursor-pointer select-none whitespace-nowrap hover:bg-gray-100/50 transition-colors duration-200';
 
   const th = (col: SortCol, label: string, extraCls = '') => (
     <th
@@ -58,7 +52,7 @@ export function IssuesTable({ rows }: Props) {
         <h3 className="text-sm font-bold text-gray-700">Задачи ({rows.length})</h3>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
+        <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
               {th('key', 'Ключ')}
@@ -78,7 +72,7 @@ export function IssuesTable({ rows }: Props) {
                     href={`${JIRA_BASE}/${row.key}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-mono text-xs font-bold text-donezo-dark hover:text-donezo-primary hover:underline transition-colors"
+                    className="font-mono text-sm font-bold text-donezo-dark hover:text-donezo-primary hover:underline transition-colors"
                   >
                     {row.key}
                   </a>
@@ -87,9 +81,7 @@ export function IssuesTable({ rows }: Props) {
                   {row.summary}
                 </td>
                 <td className="px-3 py-3.5 align-middle">
-                  <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold ${typeBadgeCls(row.type)}`}>
-                    {row.type}
-                  </span>
+                  <TypeBadge type={row.type} />
                 </td>
                 <td className="px-3 py-3.5 align-middle text-right font-bold text-gray-700 whitespace-nowrap group-hover:text-donezo-dark transition-colors">
                   {row.leadTime !== null ? `${fmtNum(row.leadTime)} d.` : <span className="text-gray-300 font-normal">—</span>}
@@ -97,7 +89,9 @@ export function IssuesTable({ rows }: Props) {
                 <td className="px-3 py-3.5 align-middle text-right font-bold text-gray-700 whitespace-nowrap group-hover:text-donezo-dark transition-colors">
                   {row.cycleTime !== null ? `${fmtNum(row.cycleTime)} d.` : <span className="text-gray-300 font-normal">—</span>}
                 </td>
-                <td className="px-3 py-3.5 align-middle text-gray-500 whitespace-nowrap group-hover:text-donezo-dark transition-colors">{row.currentStatus}</td>
+                <td className="px-3 py-3.5 align-middle whitespace-nowrap">
+                  <StatusBadge status={row.currentStatus} />
+                </td>
                 <td className="px-3 py-3.5 align-middle text-gray-500 whitespace-nowrap group-hover:text-donezo-dark transition-colors">
                   {row.completedAt ? row.completedAt.toLocaleDateString('ru-RU') : <span className="text-gray-300">—</span>}
                 </td>

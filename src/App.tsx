@@ -2,8 +2,8 @@ import { useState, useCallback } from 'react';
 import './App.css';
 
 import { fetchIssues } from './lib/api';
-import { detectWorkflows } from './lib/utils';
-import { buildTableRows, buildThroughputWeeks, getWipNow, getWipByStatus } from './lib/metrics';
+import { detectWorkflows, percentile } from './lib/utils';
+import { buildTableRows, buildThroughputWeeks, getWipNow, getWipByStatus, calcPredictabilityHistory } from './lib/metrics';
 import { useLocalStorage } from './hooks/useLocalStorage';
 
 import { Settings as SettingsPanel } from './components/Settings';
@@ -12,6 +12,7 @@ import { StatusConfig } from './components/StatusConfig';
 import { MetricCards } from './components/MetricCards';
 import { ScatterChart, ThroughputChart } from './components/Charts';
 import { MonteCarlo } from './components/MonteCarlo';
+import { PredictabilityWidget } from './components/PredictabilityWidget';
 import { AgingWIP } from './components/AgingWIP';
 import { IssuesTable } from './components/IssuesTable';
 import { RiceSection } from './components/RiceSection';
@@ -196,8 +197,14 @@ export default function App() {
                     <ScatterChart id="ct" rows={tableRows} field="cycleTime" color="#2c7a51" values={ctValues} />
                   </div>
                   <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-[400px]">
-                    <h3 className="text-sm font-bold text-gray-700 mb-4">Throughput (задач / неделю)</h3>
+                    <h3 className="text-sm font-bold text-gray-700 mb-4 text-center">Throughput (задач / неделю)</h3>
                     <ThroughputChart weeks={tpWeeks} />
+                  </div>
+                  <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-[400px]">
+                    <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center justify-center gap-1.5">
+                      Процент прогнозируемости
+                    </h3>
+                    <PredictabilityWidget data={calcPredictabilityHistory(tableRows, percentile(ctValues, 85), 12)} />
                   </div>
                 </div>
 
@@ -221,14 +228,14 @@ export default function App() {
           </>
         )}
 
-        {activeTab === 'rice' && (
+        <div className={activeTab === 'rice' ? 'block' : 'hidden'}>
           <RiceSection
             webhookUrl={settings.webhookUrl}
             onSendToQueue={(items) => setQueuePreset(items)}
             onSwitchToMetrics={() => setActiveTab('metrics')}
             onIssuesCountChange={setRiceCount}
           />
-        )}
+        </div>
 
       </div>
     </div>
