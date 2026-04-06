@@ -1,0 +1,55 @@
+/* ── Tooltip (requires ::after and hover cascade on parent) ─────────────────── */
+.metric-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: help;
+  color: #94a3b8;
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.tooltip-text {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0f172a;
+  color: white;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1.5;
+  width: 260px;
+  z-index: 1000;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0,0,0,.25);
+}
+.tooltip-text::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #0f172a;
+}
+.metric-tooltip:hover .tooltip-text { display: block; }
+
+/* ── Sort indicators (::after content) ──────────────────────────────────────── */
+th.sort-asc::after  { content: ' ↑'; }
+th.sort-desc::after { content: ' ↓'; }
+
+/* ── WIP row colored left border (td:first-child descendant) ─────────────────── */
+.wip-row-green  td:first-child { border-left: 3px solid #10b981; }
+.wip-row-yellow td:first-child { border-left: 3px solid #f59e0b; }
+.wip-row-red    td:first-child { border-left: 3px solid #ef4444; }
+
+/* ── Hide number input spinners ─────────────────────────────────────────────── */
+.no-spinner { -moz-appearance: textfield; }
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
