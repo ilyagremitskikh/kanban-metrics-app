@@ -1,0 +1,164 @@
+{
+  "name": "Kanban Metrics - Jira Data",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "kanban-metrics",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "7e6b3851-f427-4988-8820-4d519d127b7a",
+      "name": "Receive Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        304
+      ],
+      "webhookId": "82e0cadf-6c79-4dd7-bf02-6ef53d3070d4"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\n\nlet jql;\nif (body.customJql && body.customJql.trim()) {\n  jql = body.customJql.trim();\n} else {\n  const project = body.project;\n  const issueTypes = body.issueTypes || ['User Story', 'Задача', 'Ошибка', 'Техдолг'];\n  const dateFrom = body.dateFrom;\n  const dateTo = body.dateTo;\n  const typesList = issueTypes.map(t => '\"' + t + '\"').join(', ');\n  jql = 'project = \"' + project + '\" AND issuetype in (' + typesList + ')';\n  if (dateFrom && dateTo) {\n    jql += ' AND (statusCategory != Done OR (resolved >= \"' + dateFrom + '\" AND resolved <= \"' + dateTo + '\"))';\n  } else if (dateFrom) {\n    jql += ' AND (statusCategory != Done OR resolved >= \"' + dateFrom + '\")';\n  } else if (dateTo) {\n    jql += ' AND (statusCategory != Done OR resolved <= \"' + dateTo + '\")';\n  }\n  if (body.extraConditions && body.extraConditions.trim()) {\n    jql += ' AND ' + body.extraConditions.trim();\n  }\n  jql += ' ORDER BY created ASC';\n}\n\nreturn [{ json: { jql, ...body } }];"
+      },
+      "id": "cedf4379-af48-4f82-8ef2-b242f149f9a9",
+      "name": "Prepare JQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jiraVersion": "serverPat",
+        "operation": "getAll",
+        "returnAll": true,
+        "options": {
+          "expand": [
+            "changelog"
+          ],
+          "fields": "summary,issuetype,created,status,resolution",
+          "jql": "={{ $json.jql }}"
+        }
+      },
+      "id": "746b4f43-50e8-4a68-aef6-0091f19102c0",
+      "name": "Fetch Jira Issues",
+      "type": "n8n-nodes-base.jira",
+      "typeVersion": 1,
+      "position": [
+        640,
+        304
+      ],
+      "credentials": {
+        "jiraSoftwareServerPatApi": {
+          "id": "5SFlqPVwtO2oNk7Z",
+          "name": "Jira Server"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const issues = [];\n\nfor (const item of $input.all()) {\n  const issue = item.json;\n  const histories = (issue.changelog && issue.changelog.histories) ? issue.changelog.histories : [];\n\n  const sortedHistories = [...histories].sort((a, b) => new Date(a.created) - new Date(b.created));\n\n  const transitions = [];\n\n  if (sortedHistories.length > 0) {\n    const firstStatusChange = sortedHistories[0].items && sortedHistories[0].items.find(i => i.field === 'status');\n    if (firstStatusChange) {\n      transitions.push({\n        status: firstStatusChange.fromString,\n        enteredAt: issue.fields && issue.fields.created\n      });\n    }\n  } else {\n    transitions.push({\n      status: issue.fields && issue.fields.status && issue.fields.status.name,\n      enteredAt: issue.fields && issue.fields.created\n    });\n  }\n\n  for (const history of sortedHistories) {\n    for (const change of (history.items || [])) {\n      if (change.field === 'status') {\n        transitions.push({\n          status: change.toString,\n          enteredAt: history.created\n        });\n      }\n    }\n  }\n\n  issues.push({\n    key: issue.key,\n    summary: (issue.fields && issue.fields.summary) || '',\n    type: (issue.fields && issue.fields.issuetype && issue.fields.issuetype.name) || 'Unknown',\n    created: (issue.fields && issue.fields.created) || '',\n    currentStatus: (issue.fields && issue.fields.status && issue.fields.status.name) || '',\n    statusCategory: (issue.fields && issue.fields.status && issue.fields.status.statusCategory && issue.fields.status.statusCategory.key) || undefined,\n    resolution: (issue.fields && issue.fields.resolution && issue.fields.resolution.name) || undefined,\n    transitions\n  });\n}\n\nreturn [{ json: { issues, meta: { total: issues.length, fetchedAt: new Date().toISOString() } } }];"
+      },
+      "id": "9707e2d7-7ce4-46a8-b152-a61b698c11bc",
+      "name": "Transform Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "f8a87a2a-8762-4cf1-949a-7f40ff3e3526",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1040,
+        304
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receive Request": {
+      "main": [
+        [
+          {
+            "node": "Prepare JQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare JQL": {
+      "main": [
+        [
+          {
+            "node": "Fetch Jira Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Jira Issues": {
+      "main": [
+        [
+          {
+            "node": "Transform Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform Data": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "5baf3330-de47-4844-8a7c-2ddaf21c9d07",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "instanceId": "166a83f3b5979b833d91a82f993d0ab73b3eaf47ab8ca6dca2eb8a3d37458905"
+  },
+  "id": "oCNub78Cu9N6vLTc",
+  "tags": []
+}

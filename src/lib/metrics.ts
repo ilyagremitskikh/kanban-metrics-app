@@ -42,7 +42,7 @@ export function calcCycleTime(
 
   const endMatches = issue.transitions.filter((t) => t.status === resolvedEndStatus);
   if (!endMatches.length) return null;
-  const endTime = Math.min(...endMatches.map((t) => new Date(t.enteredAt).getTime()));
+  const endTime = Math.max(...endMatches.map((t) => new Date(t.enteredAt).getTime()));
 
   let lastStart: Date | null = null;
   for (const t of issue.transitions) {

@@ -179,7 +179,7 @@ export function detectWorkflows(issues: Issue[]): WorkflowConfig[] {
     // Tasks/Ошибка/Техдолг: 'Готова к Prod' (development done, awaiting release)
     // User Story: 'Готово' (no separate Prod-ready status in US flow)
     const ctEnd = isUserStory
-      ? ltEnd
+      ? findStatus(statuses, ['готово к приемке', 'частичный релиз']) ?? ltEnd
       : findStatus(doneStatuses, ['готова к prod', 'к prod', 'готова к прод']) ??
         'Готова к Prod';
 
