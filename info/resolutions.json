@@ -1,0 +1,128 @@
+[
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/21",
+        "id": "21",
+        "description": "",
+        "name": "Разрешен"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/29",
+        "id": "29",
+        "description": "",
+        "name": "Отменен"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/19",
+        "id": "19",
+        "description": "",
+        "name": "Новая"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/2",
+        "id": "2",
+        "description": "После процесса Копирование ФАД",
+        "name": "Скопирован"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/3",
+        "id": "3",
+        "description": "После процесса Загрузка в АБЭД",
+        "name": "Загружен в АБЭД"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/5",
+        "id": "5",
+        "description": "После процесса Запись на диск",
+        "name": "Создана ЕХ"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/6",
+        "id": "6",
+        "description": "После процесса Передача в архив",
+        "name": "В архиве"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/9",
+        "id": "9",
+        "description": "Администратор АБЭД «не загружаются документы»",
+        "name": "Документы не загружаются"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/12",
+        "id": "12",
+        "description": "Аудит проверил: дата xx.xx.xxxx Результат",
+        "name": "Аудит проведен"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/13",
+        "id": "13",
+        "description": "",
+        "name": "Данные не актуальны"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/22",
+        "id": "22",
+        "description": "",
+        "name": "Won't Fix"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/25",
+        "id": "25",
+        "description": "Задача не актуальна",
+        "name": "Не требует выполнения"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/30",
+        "id": "30",
+        "description": "GreenHopper Managed Resolution",
+        "name": "Готово"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/10403",
+        "id": "10403",
+        "description": "Эта проблема не будет выполнена.",
+        "name": "Не будет выполнено"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/10500",
+        "id": "10500",
+        "description": "",
+        "name": "Не подтвержден"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/10600",
+        "id": "10600",
+        "description": "Для этой проблемы работа завершена.",
+        "name": "Готово"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/10601",
+        "id": "10601",
+        "description": "Данная проблема не будет выполняться.",
+        "name": "Не получится"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/10602",
+        "id": "10602",
+        "description": "Задача идентична существующей.",
+        "name": "Дубликат"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/10603",
+        "id": "10603",
+        "description": "Не удалась ни одна попытка воспроизведения этой проблемы; возможно, было недостаточно информации. Чтение кода не дает какой-либо информации о причинах такого поведения. Если впоследствии появятся новые данные, откройте эту проблему заново.",
+        "name": "Не воспроизводится"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/10604",
+        "id": "10604",
+        "description": "",
+        "name": "Передумали"
+    },
+    {
+        "self": "https://jira.tochka.com/rest/api/2/resolution/10605",
+        "id": "10605",
+        "description": "",
+        "name": "Ошибочно создана"
+    }
+]

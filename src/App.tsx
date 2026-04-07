@@ -40,7 +40,7 @@ type StatusType = 'hidden' | 'info' | 'error' | 'success';
 
 const TABS: { id: AppTab; label: string }[] = [
   { id: 'metrics',  label: 'Метрики' },
-  { id: 'rice',     label: 'RICE' },
+  { id: 'rice',     label: 'Scoring' },
   { id: 'ai',       label: '🤖 ИИ-Ассистент' },
   { id: 'settings', label: 'Настройки' },
 ];
@@ -108,7 +108,7 @@ export default function App() {
             <div>
               <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight leading-none">Kanban Metrics</h1>
               <div className="text-xs text-gray-500 mt-1.5 tracking-wider font-semibold uppercase">
-                Analytics &nbsp;•&nbsp; RICE &nbsp;•&nbsp; AI
+                Analytics &nbsp;•&nbsp; Scoring &nbsp;•&nbsp; AI
               </div>
             </div>
           </div>

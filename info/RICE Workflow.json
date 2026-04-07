@@ -297,7 +297,11 @@
             "impact": "={{ $json.impact }}",
             "confidence": "={{ $json.confidence }}",
             "rice_score": "={{ $json.rice_score }}",
-            "effort": "={{ $json.effort }}"
+            "effort": "={{ $json.effort }}",
+            "severity": "={{ $json.severity }}",
+            "bug_priority": "={{ $json.bug_priority }}",
+            "bug_score": "={{ $json.bug_score }}",
+            "cost_of_delay": "={{ $json.cost_of_delay }}"
           },
           "matchingColumns": [],
           "schema": [
@@ -404,6 +408,46 @@
             {
               "id": "effort",
               "displayName": "effort",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "severity",
+              "displayName": "severity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "bug_priority",
+              "displayName": "bug_priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "bug_score",
+              "displayName": "bug_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "cost_of_delay",
+              "displayName": "cost_of_delay",
               "required": false,
               "defaultMatch": false,
               "display": true,

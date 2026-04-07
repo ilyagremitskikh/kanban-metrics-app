@@ -15,11 +15,18 @@ export async function fetchRiceIssues(webhookUrl: string): Promise<RiceIssue[]> 
 
 export interface RiceUpdate {
   key: string;
-  reach: number;
-  impact: number;
-  confidence: number;
-  effort: number;
-  rice_score: number;
+  // RICE fields (User Story / Задача) — null для других типов
+  reach: number | null;
+  impact: number | null;
+  confidence: number | null;
+  effort: number | null;
+  rice_score: number | null;
+  // Bug fields (Ошибка) — null для других типов
+  severity: string | null;
+  bug_priority: string | null;
+  bug_score: number | null;
+  // Tech Debt fields (Техдолг) — null для других типов
+  cost_of_delay: number | null;
 }
 
 export async function saveRiceScores(webhookUrl: string, updates: RiceUpdate[]): Promise<void> {

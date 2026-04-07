@@ -77,11 +77,18 @@ export interface RiceIssue {
   labels: string;
   priority: string;
   status: string;
+  // RICE fields (User Story / Задача)
   reach: number | null;
   impact: number | null;
   confidence: number | null;
   effort: number | null;
   rice_score: number | null;
+  // Bug fields (Ошибка)
+  severity: string | null;
+  bug_priority: string | null;
+  bug_score: number | null;
+  // Tech Debt fields (Техдолг)
+  cost_of_delay: number | null;
 }
 
 export interface CalculatedMetrics {
