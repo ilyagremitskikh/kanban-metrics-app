@@ -1,6 +1,6 @@
 GET https://n8n.mindhackerdev.ru/webhook-test/throughput
 INNER JQL: project = CREDITS AND labels = Партнерские_Интеграции AND resolved >= 2026-01-12 AND resolved <= 2026-04-07 ORDER BY created DESC
-INNER FIELDS: resolution,resolutiondate
+INNER FIELDS: resolution,resolutiondate,issuetype
 
 Example response:
 {
@@ -11,6 +11,15 @@ Example response:
             "self": "https://jira.tochka.com/rest/api/2/issue/1568622",
             "key": "CREDITS-9036",
             "fields": {
+                "issuetype": {
+                    "self": "https://jira.tochka.com/rest/api/2/issuetype/3",
+                    "id": "3",
+                    "description": "Стандартный запрос",
+                    "iconUrl": "https://jira.tochka.com/secure/viewavatar?size=xsmall&avatarId=13518&avatarType=issuetype",
+                    "name": "Задача",
+                    "subtask": false,
+                    "avatarId": 13518
+                },
                 "resolution": {
                     "self": "https://jira.tochka.com/rest/api/2/resolution/21",
                     "id": "21",
@@ -26,6 +35,15 @@ Example response:
             "self": "https://jira.tochka.com/rest/api/2/issue/1565585",
             "key": "CREDITS-9020",
             "fields": {
+                "issuetype": {
+                    "self": "https://jira.tochka.com/rest/api/2/issuetype/3",
+                    "id": "3",
+                    "description": "Стандартный запрос",
+                    "iconUrl": "https://jira.tochka.com/secure/viewavatar?size=xsmall&avatarId=13518&avatarType=issuetype",
+                    "name": "Задача",
+                    "subtask": false,
+                    "avatarId": 13518
+                },
                 "resolution": {
                     "self": "https://jira.tochka.com/rest/api/2/resolution/21",
                     "id": "21",
@@ -41,6 +59,15 @@ Example response:
             "self": "https://jira.tochka.com/rest/api/2/issue/1564134",
             "key": "CREDITS-9011",
             "fields": {
+                "issuetype": {
+                    "self": "https://jira.tochka.com/rest/api/2/issuetype/3",
+                    "id": "3",
+                    "description": "Стандартный запрос",
+                    "iconUrl": "https://jira.tochka.com/secure/viewavatar?size=xsmall&avatarId=13518&avatarType=issuetype",
+                    "name": "Задача",
+                    "subtask": false,
+                    "avatarId": 13518
+                },
                 "resolution": {
                     "self": "https://jira.tochka.com/rest/api/2/resolution/21",
                     "id": "21",
