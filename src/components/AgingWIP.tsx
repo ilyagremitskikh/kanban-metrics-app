@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { percentile, fmtNum } from '../lib/utils';
-import { getWorkflowForIssue, isWipIssue } from '../lib/metrics';
-import type { Issue, WorkflowConfig } from '../types';
+import { BUCKETS } from '../lib/metrics';
+import type { Issue } from '../types';
 import { TypeBadge, StatusBadge } from './Badges';
 
 Chart.register(...registerables);
@@ -19,8 +19,8 @@ interface AgedIssue {
 
 interface Props {
   issues: Issue[];
-  workflows: WorkflowConfig[];
-  ctValues: number[];
+  bucket: 'upstream' | 'downstream';
+  thresholdValues: number[];
 }
 
 function deltaLabel(age: number, p: number | null): string {
@@ -34,34 +34,33 @@ function deltaClass(age: number, p: number | null): string {
   return age > p ? 'text-red-600 font-semibold' : 'text-emerald-600';
 }
 
-export function AgingWIP({ issues, workflows, ctValues }: Props) {
+export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<Chart | null>(null);
   const [showTable, setShowTable] = useState(false);
   const [aged, setAged]           = useState<AgedIssue[]>([]);
 
-  const ctP50 = percentile(ctValues, 50);
-  const ctP85 = percentile(ctValues, 85);
+  const activeBucketStatuses = bucket === 'upstream'
+    ? BUCKETS.UPSTREAM_ACTIVE
+    : BUCKETS.DOWNSTREAM_ACTIVE;
+
+  const p50 = percentile(thresholdValues, 50);
+  const p85 = percentile(thresholdValues, 85);
 
   useEffect(() => {
     const now = new Date();
-    const wipIssues = issues.filter((i) => {
-      const wf = getWorkflowForIssue(i, workflows);
-      return wf ? isWipIssue(i, wf) : false;
-    });
+    const wipIssues = issues.filter((i) => activeBucketStatuses.includes(i.currentStatus));
 
     const computed = wipIssues
       .map((i) => {
-        const wf = getWorkflowForIssue(i, workflows)!;
-        const ctStartTs = i.transitions
-          .filter((t) => t.status === wf.ctStart)
-          .map((t) => new Date(t.enteredAt).getTime());
-        // Fall back to earliest transition or issue.created when ctStart was never entered
-        // (e.g. task went directly to Code Review, skipping ctStart).
-        const fallbackTs = i.transitions.length
-          ? Math.min(...i.transitions.map((t) => new Date(t.enteredAt).getTime()))
+        const sorted = [...i.transitions].sort(
+          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+        );
+        // Age = time since first entry into this bucket's active statuses
+        const firstBucketTransition = sorted.find((t) => activeBucketStatuses.includes(t.to));
+        const startTs = firstBucketTransition
+          ? new Date(firstBucketTransition.date).getTime()
           : new Date(i.created).getTime();
-        const startTs = ctStartTs.length ? Math.max(...ctStartTs) : fallbackTs;
         return {
           key: i.key,
           summary: i.summary,
@@ -74,21 +73,23 @@ export function AgingWIP({ issues, workflows, ctValues }: Props) {
       .slice(0, 40);
 
     setAged(computed);
-  }, [issues, workflows]);
+  }, [issues, bucket]);
 
   useEffect(() => {
     if (!canvasRef.current || !aged.length) return;
     chartRef.current?.destroy();
 
     const barColors = aged.map((i) => {
-      if (ctP50 !== null && i.age <= ctP50) return '#10b981cc';
-      if (ctP85 !== null && i.age <= ctP85) return '#f59e0bcc';
+      if (p50 !== null && i.age <= p50) return '#10b981cc';
+      if (p85 !== null && i.age <= p85) return '#f59e0bcc';
       return '#ef4444cc';
     });
 
     const h = Math.max(200, aged.length * 28);
     canvasRef.current.style.height = h + 'px';
     canvasRef.current.height = h;
+
+    const metricLabel = bucket === 'upstream' ? 'Upstream' : 'Dev CT';
 
     chartRef.current = new Chart(canvasRef.current, {
       type: 'bar',
@@ -102,11 +103,11 @@ export function AgingWIP({ issues, workflows, ctValues }: Props) {
             borderWidth: 0,
             borderRadius: 3,
           },
-          ...(ctP50 !== null
+          ...(p50 !== null
             ? [{
                 type: 'line' as const,
-                label: `CT P50 (${fmtNum(ctP50)}d.)`,
-                data: aged.map(() => ctP50),
+                label: `${metricLabel} P50 (${fmtNum(p50)}d.)`,
+                data: aged.map(() => p50),
                 borderColor: '#6b7280',
                 borderWidth: 1.5,
                 borderDash: [3, 3],
@@ -114,11 +115,11 @@ export function AgingWIP({ issues, workflows, ctValues }: Props) {
                 fill: false,
               }]
             : []),
-          ...(ctP85 !== null
+          ...(p85 !== null
             ? [{
                 type: 'line' as const,
-                label: `CT P85 (${fmtNum(ctP85)}d.)`,
-                data: aged.map(() => ctP85),
+                label: `${metricLabel} P85 (${fmtNum(p85)}d.)`,
+                data: aged.map(() => p85),
                 borderColor: '#f59e0b',
                 borderWidth: 1.5,
                 borderDash: [4, 4],
@@ -154,7 +155,7 @@ export function AgingWIP({ issues, workflows, ctValues }: Props) {
         },
       },
     });
-  }, [aged, ctP50, ctP85]);
+  }, [aged, p50, p85]);
 
   useEffect(() => () => { chartRef.current?.destroy(); }, []);
 
@@ -188,8 +189,8 @@ export function AgingWIP({ issues, workflows, ctValues }: Props) {
             <tbody>
               {aged.map((i) => {
                 const color =
-                  ctP50 !== null && i.age <= ctP50 ? 'green'
-                  : ctP85 !== null && i.age <= ctP85 ? 'yellow'
+                  p50 !== null && i.age <= p50 ? 'green'
+                  : p85 !== null && i.age <= p85 ? 'yellow'
                   : 'red';
                 return (
                   <tr key={i.key} className={`border-b border-gray-50 last:border-none hover:bg-donezo-light/30 transition-colors duration-200 group wip-row-${color}`}>
@@ -211,8 +212,8 @@ export function AgingWIP({ issues, workflows, ctValues }: Props) {
                       <StatusBadge status={i.currentStatus} />
                     </td>
                     <td className="px-3 py-3.5 font-bold whitespace-nowrap group-hover:text-donezo-dark transition-colors">{fmtNum(i.age)}d.</td>
-                    <td className={`px-3 py-3.5 whitespace-nowrap ${deltaClass(i.age, ctP50)} group-hover:text-donezo-dark transition-colors`}>{deltaLabel(i.age, ctP50)}</td>
-                    <td className={`px-3 py-3.5 whitespace-nowrap ${deltaClass(i.age, ctP85)} group-hover:text-donezo-dark transition-colors`}>{deltaLabel(i.age, ctP85)}</td>
+                    <td className={`px-3 py-3.5 whitespace-nowrap ${deltaClass(i.age, p50)} group-hover:text-donezo-dark transition-colors`}>{deltaLabel(i.age, p50)}</td>
+                    <td className={`px-3 py-3.5 whitespace-nowrap ${deltaClass(i.age, p85)} group-hover:text-donezo-dark transition-colors`}>{deltaLabel(i.age, p85)}</td>
                   </tr>
                 );
               })}

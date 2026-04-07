@@ -3,79 +3,23 @@ INNER JQL: project = CREDITS AND labels = Партнерские_Интегра�
 INNER FIELDS: resolution,resolutiondate,issuetype
 
 Example response:
-{
-    "data": [
-        {
-            "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
-            "id": "1568622",
-            "self": "https://jira.tochka.com/rest/api/2/issue/1568622",
-            "key": "CREDITS-9036",
-            "fields": {
-                "issuetype": {
-                    "self": "https://jira.tochka.com/rest/api/2/issuetype/3",
-                    "id": "3",
-                    "description": "Стандартный запрос",
-                    "iconUrl": "https://jira.tochka.com/secure/viewavatar?size=xsmall&avatarId=13518&avatarType=issuetype",
-                    "name": "Задача",
-                    "subtask": false,
-                    "avatarId": 13518
-                },
-                "resolution": {
-                    "self": "https://jira.tochka.com/rest/api/2/resolution/21",
-                    "id": "21",
-                    "description": "",
-                    "name": "Разрешен"
-                },
-                "resolutiondate": "2026-04-03T17:24:32.000+0500"
-            }
-        },
-        {
-            "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
-            "id": "1565585",
-            "self": "https://jira.tochka.com/rest/api/2/issue/1565585",
-            "key": "CREDITS-9020",
-            "fields": {
-                "issuetype": {
-                    "self": "https://jira.tochka.com/rest/api/2/issuetype/3",
-                    "id": "3",
-                    "description": "Стандартный запрос",
-                    "iconUrl": "https://jira.tochka.com/secure/viewavatar?size=xsmall&avatarId=13518&avatarType=issuetype",
-                    "name": "Задача",
-                    "subtask": false,
-                    "avatarId": 13518
-                },
-                "resolution": {
-                    "self": "https://jira.tochka.com/rest/api/2/resolution/21",
-                    "id": "21",
-                    "description": "",
-                    "name": "Разрешен"
-                },
-                "resolutiondate": "2026-04-02T10:48:31.000+0500"
-            }
-        },
-        {
-            "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
-            "id": "1564134",
-            "self": "https://jira.tochka.com/rest/api/2/issue/1564134",
-            "key": "CREDITS-9011",
-            "fields": {
-                "issuetype": {
-                    "self": "https://jira.tochka.com/rest/api/2/issuetype/3",
-                    "id": "3",
-                    "description": "Стандартный запрос",
-                    "iconUrl": "https://jira.tochka.com/secure/viewavatar?size=xsmall&avatarId=13518&avatarType=issuetype",
-                    "name": "Задача",
-                    "subtask": false,
-                    "avatarId": 13518
-                },
-                "resolution": {
-                    "self": "https://jira.tochka.com/rest/api/2/resolution/21",
-                    "id": "21",
-                    "description": "",
-                    "name": "Разрешен"
-                },
-                "resolutiondate": "2026-04-01T16:13:26.000+0500"
-            }
-        }
-    ]
-}
+[
+  {
+    "key": "CREDITS-9036",
+    "created": "2026-04-03T11:49:35.000+0500",
+    "issueType": "Задача",
+    "summary": "Добавить выбор сервиса при работе с credit-checks",
+    "currentStatus": "Готово",
+    "resolution": "Разрешен",
+    "resolutionDate": "2026-04-03T17:24:32.000+0500"
+  },
+  {
+    "key": "CREDITS-9020",
+    "created": "2026-04-01T12:00:00.000+0500",
+    "issueType": "Задача",
+    "summary": "Обновить отображение процентной ставки по кредиту ДомРФ",
+    "currentStatus": "Готово",
+    "resolution": "Разрешен",
+    "resolutionDate": "2026-04-02T10:48:31.000+0500"
+  }
+]

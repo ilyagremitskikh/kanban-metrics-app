@@ -46,8 +46,8 @@ export function Settings({ settings, onChange, onFetch, loading, loadingLabel }:
         </div>
       </div>
 
-      {/* Top row: URLs + dates */}
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_140px_140px] gap-3 mb-4">
+      {/* Top row: Webhook URLs */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
         <div>
           <label className={labelCls}>Jira Webhook URL</label>
           <input
@@ -59,27 +59,19 @@ export function Settings({ settings, onChange, onFetch, loading, loadingLabel }:
           />
         </div>
         <div>
-          <label className={labelCls}>AI Agent Webhook URL</label>
+          <label className={labelCls}>Throughput Webhook URL</label>
           <input
             type="url"
             className={inputCls}
-            value={settings.aiWebhookUrl || ''}
-            placeholder="https://n8n.example.com/webhook/kanban-ai"
-            onChange={(e) => set({ aiWebhookUrl: e.target.value })}
+            value={settings.throughputWebhookUrl || ''}
+            placeholder="https://n8n.example.com/webhook/throughput"
+            onChange={(e) => set({ throughputWebhookUrl: e.target.value || undefined })}
           />
-        </div>
-        <div>
-          <label className={labelCls}>Дата с</label>
-          <input type="date" className={inputCls} value={settings.dateFrom} onChange={(e) => set({ dateFrom: e.target.value })} />
-        </div>
-        <div>
-          <label className={labelCls}>Дата по</label>
-          <input type="date" className={inputCls} value={settings.dateTo} onChange={(e) => set({ dateTo: e.target.value })} />
         </div>
       </div>
 
       {settings.mode === 'standard' ? (
-        <div className="grid grid-cols-1 md:grid-cols-[120px_1fr_1fr_auto] gap-3 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-[120px_1fr_auto] gap-3 items-end">
           <div>
             <label className={labelCls}>Проект</label>
             <input
@@ -114,19 +106,6 @@ export function Settings({ settings, onChange, onFetch, loading, loadingLabel }:
             </div>
           </div>
           <div>
-            <label className={labelCls}>
-              Доп. условие JQL{' '}
-              <span className="text-gray-400 font-normal ml-1">необязательно</span>
-            </label>
-            <input
-              type="text"
-              className={inputCls}
-              value={settings.extraConditions}
-              placeholder="labels = Партнерские_Интеграции"
-              onChange={(e) => set({ extraConditions: e.target.value })}
-            />
-          </div>
-          <div>
             <button
               className="px-6 py-2.5 bg-donezo-dark text-white rounded-full text-sm font-bold shadow-sm cursor-pointer border-none transition-all duration-200 hover:bg-donezo-primary hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none whitespace-nowrap"
               onClick={onFetch}
@@ -144,7 +123,7 @@ export function Settings({ settings, onChange, onFetch, loading, loadingLabel }:
               rows={2}
               className={`${inputCls} resize-y leading-relaxed`}
               value={settings.customJql}
-              placeholder='project = CREDITS AND issuetype in ("User Story", Задача) AND labels = Партнерские_Интеграции ORDER BY created ASC'
+              placeholder='project = CREDITS AND issuetype in ("User Story", Задача) ORDER BY created ASC'
               onChange={(e) => set({ customJql: e.target.value })}
             />
           </div>

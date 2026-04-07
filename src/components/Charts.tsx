@@ -10,7 +10,7 @@ Chart.register(...registerables);
 interface ScatterProps {
   id: string;
   rows: TableRow[];
-  field: 'leadTime' | 'cycleTime';
+  field: 'leadTime' | 'devCycleTime' | 'upstreamTime';
   color: string;
   values: number[];
 }
@@ -60,7 +60,7 @@ export function ScatterChart({ id, rows, field, color, values }: ScatterProps) {
       data: {
         datasets: [
           {
-            label: field === 'leadTime' ? 'Lead Time' : 'Cycle Time',
+            label: field === 'leadTime' ? 'Lead Time' : field === 'devCycleTime' ? 'Dev Cycle Time' : 'Upstream Time',
             data: points,
             backgroundColor: color + 'aa',
             borderColor: color,
@@ -114,6 +114,15 @@ export function ScatterChart({ id, rows, field, color, values }: ScatterProps) {
 
 // ─── Throughput Chart ─────────────────────────────────────────────────────────
 
+const TYPE_COLORS: Record<string, string> = {
+  'Задача':     '#10b981',
+  'User Story': '#10b981',
+  'Ошибка':     '#ef4444',
+  'Техдолг':    '#f59e0b',
+};
+const DEFAULT_TYPE_COLOR = '#64748b';
+function typeColor(name: string): string { return TYPE_COLORS[name] ?? DEFAULT_TYPE_COLOR; }
+
 export function ThroughputChart({ weeks }: { weeks: ThroughputWeek[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<Chart | null>(null);
@@ -121,25 +130,45 @@ export function ThroughputChart({ weeks }: { weeks: ThroughputWeek[] }) {
   useEffect(() => {
     if (!canvasRef.current) return;
     chartRef.current?.destroy();
+
+    const hasBreakdown = weeks.some((w) => w.byType && Object.keys(w.byType).length > 0);
+    const labels = weeks.map((w) => fmtWeekLabel(w.date));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let datasets: any[];
+    if (hasBreakdown) {
+      const allTypes = [...new Set(weeks.flatMap((w) => Object.keys(w.byType ?? {})))];
+      datasets = allTypes.map((t) => ({
+        label: t,
+        data: weeks.map((w) => w.byType?.[t] ?? 0),
+        backgroundColor: typeColor(t) + 'cc',
+        borderColor: typeColor(t),
+        borderWidth: 1,
+        borderRadius: 4,
+        stack: 'tp',
+      }));
+    } else {
+      datasets = [{
+        label: 'Задач выполнено',
+        data: weeks.map((w) => w.count),
+        backgroundColor: '#10b981aa',
+        borderColor: '#10b981',
+        borderWidth: 1.5,
+        borderRadius: 4,
+      }];
+    }
+
     chartRef.current = new Chart(canvasRef.current, {
       type: 'bar',
-      data: {
-        labels: weeks.map((w) => fmtWeekLabel(w.date)),
-        datasets: [{
-          label: 'Задач выполнено',
-          data: weeks.map((w) => w.count),
-          backgroundColor: '#10b981aa',
-          borderColor: '#10b981',
-          borderWidth: 1.5,
-          borderRadius: 4,
-        }],
-      },
+      data: { labels, datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: hasBreakdown, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+        },
         scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 11 } } },
-          y: { min: 0, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: '#f3f4f6' } },
+          x: { stacked: hasBreakdown, grid: { display: false }, ticks: { font: { size: 11 } } },
+          y: { stacked: hasBreakdown, min: 0, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: '#f3f4f6' } },
         },
       },
     });

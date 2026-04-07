@@ -1,5 +1,4 @@
-import type { Issue, Settings } from '../types';
-import { getMonthlyChunks } from './utils';
+import type { Issue, Settings, ThroughputIssueRaw } from '../types';
 
 /** In dev mode, strip origin so Vite proxy handles CORS. In prod, keep full URL. */
 function proxyUrl(fullUrl: string): string {
@@ -28,34 +27,31 @@ export async function fetchIssues(
   settings: Settings,
   onProgress: (msg: string) => void,
 ): Promise<Issue[]> {
-  const { webhookUrl, dateFrom, dateTo, mode } = settings;
+  const { webhookUrl, mode } = settings;
+
+  onProgress('Запрашиваем данные из Jira через n8n…');
 
   if (mode === 'custom') {
-    onProgress('Запрашиваем данные из Jira через n8n…');
-    return callWebhook(webhookUrl, {
-      customJql: settings.customJql,
-      dateFrom,
-      dateTo,
-    });
+    return callWebhook(webhookUrl, { customJql: settings.customJql });
   }
 
-  const chunks = getMonthlyChunks(new Date(dateFrom), new Date(dateTo));
-  let allIssues: Issue[] = [];
+  return callWebhook(webhookUrl, {
+    project: settings.projectKey,
+    issueTypes: settings.issueTypes,
+  });
+}
 
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i];
-    onProgress(`Загружаем ${chunk.label}… (${i + 1} из ${chunks.length})`);
-    const issues = await callWebhook(webhookUrl, {
-      project: settings.projectKey,
-      issueTypes: settings.issueTypes,
-      extraConditions: settings.extraConditions,
-      dateFrom: chunk.from,
-      dateTo: chunk.to,
-    });
-    allIssues = allIssues.concat(issues);
-  }
-
-  // Deduplicate by key
-  const seen = new Set<string>();
-  return allIssues.filter((i) => !seen.has(i.key) && seen.add(i.key));
+export async function fetchThroughputRaw(
+  settings: Settings,
+  onProgress: (msg: string) => void,
+): Promise<ThroughputIssueRaw[]> {
+  const { throughputWebhookUrl } = settings;
+  if (!throughputWebhookUrl) throw new Error('throughputWebhookUrl не задан');
+  onProgress('Загружаем throughput данные…');
+  const res = await fetch(proxyUrl(throughputWebhookUrl));
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  const data = await res.json();
+  if (!data.data || !Array.isArray(data.data))
+    throw new Error('Неожиданный формат ответа throughput webhook. Ожидается { data: [...] }');
+  return data.data as ThroughputIssueRaw[];
 }

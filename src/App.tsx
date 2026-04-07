@@ -1,14 +1,19 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import './App.css';
 
-import { fetchIssues } from './lib/api';
-import { detectWorkflows, percentile } from './lib/utils';
-import { buildTableRows, buildThroughputWeeks, getWipNow, getWipByStatus, calcPredictabilityHistory } from './lib/metrics';
+import { fetchIssues, fetchThroughputRaw } from './lib/api';
+import { percentile } from './lib/utils';
+import {
+  buildTableRows,
+  buildThroughputWeeks,
+  buildThroughputWeeksFromRaw,
+  getWipBuckets,
+  calcPredictabilityHistory,
+} from './lib/metrics';
 import { useLocalStorage } from './hooks/useLocalStorage';
 
 import { Settings as SettingsPanel } from './components/Settings';
 import { StatusBar } from './components/StatusBar';
-import { StatusConfig } from './components/StatusConfig';
 import { MetricCards } from './components/MetricCards';
 import { ScatterChart, ThroughputChart } from './components/Charts';
 import { MonteCarlo } from './components/MonteCarlo';
@@ -16,38 +21,28 @@ import { PredictabilityWidget } from './components/PredictabilityWidget';
 import { AgingWIP } from './components/AgingWIP';
 import { IssuesTable } from './components/IssuesTable';
 import { RiceSection } from './components/RiceSection';
-import { AIAgentTab } from './components/AIAgentTab';
 
-import type { Issue, WorkflowConfig, Settings as SettingsType } from './types';
-
-const today = new Date();
-const defaultFrom = new Date(today);
-defaultFrom.setMonth(defaultFrom.getMonth() - 3);
+import type { Issue, ThroughputWeek, Settings as SettingsType } from './types';
 
 const DEFAULT_SETTINGS: SettingsType = {
   webhookUrl: '',
-  dateFrom: defaultFrom.toISOString().slice(0, 10),
-  dateTo: today.toISOString().slice(0, 10),
   mode: 'standard',
   projectKey: '',
   issueTypes: ['User Story', 'Задача', 'Ошибка', 'Техдолг'],
-  extraConditions: '',
   customJql: '',
 };
 
-type AppTab     = 'metrics' | 'rice' | 'ai' | 'settings';
+type AppTab     = 'metrics' | 'rice' | 'settings';
 type StatusType = 'hidden' | 'info' | 'error' | 'success';
 
 const TABS: { id: AppTab; label: string }[] = [
   { id: 'metrics',  label: 'Метрики' },
   { id: 'rice',     label: 'Scoring' },
-  { id: 'ai',       label: '🤖 ИИ-Ассистент' },
   { id: 'settings', label: 'Настройки' },
 ];
 
 export default function App() {
-  const [settings, setSettings]   = useLocalStorage<SettingsType>('km_settings', DEFAULT_SETTINGS);
-  const [workflows, setWorkflows] = useLocalStorage<WorkflowConfig[]>('km_workflows', []);
+  const [settings, setSettings] = useLocalStorage<SettingsType>('km_settings', DEFAULT_SETTINGS);
 
   const [activeTab, setActiveTab]       = useState<AppTab>('settings');
   const [issues, setIssues]             = useState<Issue[]>([]);
@@ -57,10 +52,7 @@ export default function App() {
   const [loadingLabel, setLoadingLabel] = useState('Загрузить данные');
   const [hasData, setHasData]           = useState(false);
   const [riceCount, setRiceCount]       = useState<number | null>(null);
-
-  const applyWorkflows = useCallback((loaded: Issue[]) => {
-    setWorkflows(detectWorkflows(loaded));
-  }, [setWorkflows]);
+  const [tpWeeksRaw, setTpWeeksRaw]     = useState<ThroughputWeek[] | null>(null);
 
   const handleFetch = async () => {
     if (!settings.webhookUrl) { setStatus({ msg: 'Укажите n8n Webhook URL', type: 'error' }); return; }
@@ -76,7 +68,20 @@ export default function App() {
       });
       setIssues(loaded);
       setStatus({ msg: '', type: 'hidden' });
-      applyWorkflows(loaded);
+
+      if (settings.throughputWebhookUrl) {
+        try {
+          const rawItems = await fetchThroughputRaw(settings, (msg) => setStatus({ msg, type: 'info' }));
+          setTpWeeksRaw(buildThroughputWeeksFromRaw(rawItems));
+        } catch (err) {
+          console.warn('Throughput webhook failed, falling back:', err);
+          setTpWeeksRaw(null);
+        }
+        setStatus({ msg: '', type: 'hidden' });
+      } else {
+        setTpWeeksRaw(null);
+      }
+
       setHasData(true);
       setActiveTab('metrics');
     } catch (err) {
@@ -87,18 +92,19 @@ export default function App() {
     }
   };
 
-  const tableRows      = hasData ? buildTableRows(issues, workflows) : [];
-  const ltValues       = tableRows.filter((r) => r.leadTime  !== null).map((r) => r.leadTime  as number);
-  const ctValues       = tableRows.filter((r) => r.cycleTime !== null).map((r) => r.cycleTime as number);
-  const tpWeeks        = hasData ? buildThroughputWeeks(issues, workflows) : [];
-  const wipNow         = hasData ? getWipNow(issues, workflows) : 0;
-  const wipByStatus    = hasData ? getWipByStatus(issues, workflows) : {};
-  const completedTotal = tableRows.filter((r) => r.completedAt !== null).length;
+  const tableRows      = hasData ? buildTableRows(issues) : [];
+  const ltValues       = tableRows.filter((r) => r.leadTime      !== null).map((r) => r.leadTime      as number);
+  const ctValues       = tableRows.filter((r) => r.devCycleTime  !== null).map((r) => r.devCycleTime  as number);
+  const upstreamValues = tableRows.filter((r) => r.upstreamTime  !== null).map((r) => r.upstreamTime  as number);
+  const tpWeeksFallback = hasData ? buildThroughputWeeks(issues) : [];
+  const tpWeeks         = tpWeeksRaw ?? tpWeeksFallback;
+  const wipBuckets      = hasData ? getWipBuckets(issues) : { upstream: {}, downstream: {} };
+  const completedTotal  = tableRows.filter((r) => r.completedAt !== null).length;
 
   return (
     <div className="min-h-screen bg-donezo-bg font-sans p-4 md:p-6 lg:p-8 flex items-center justify-center">
       <div className="max-w-[1500px] w-full bg-donezo-bg flex flex-col gap-6">
-        
+
         {/* ── Header & Tab bar ── */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
@@ -108,7 +114,7 @@ export default function App() {
             <div>
               <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight leading-none">Kanban Metrics</h1>
               <div className="text-xs text-gray-500 mt-1.5 tracking-wider font-semibold uppercase">
-                Analytics &nbsp;•&nbsp; Scoring &nbsp;•&nbsp; AI
+                Analytics &nbsp;•&nbsp; Scoring
               </div>
             </div>
           </div>
@@ -181,12 +187,13 @@ export default function App() {
               </div>
             ) : (
               <>
-                <StatusConfig workflows={workflows} onChange={setWorkflows} issueCount={issues.length} />
-
                 <MetricCards
-                  ltValues={ltValues} ctValues={ctValues}
-                  tpWeeks={tpWeeks} wipByStatus={wipByStatus}
-                  wipNow={wipNow} completedTotal={completedTotal}
+                  ltValues={ltValues}
+                  ctValues={ctValues}
+                  upstreamValues={upstreamValues}
+                  tpWeeks={tpWeeks}
+                  wipBuckets={wipBuckets}
+                  completedTotal={completedTotal}
                 />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -195,8 +202,12 @@ export default function App() {
                     <ScatterChart id="lt" rows={tableRows} field="leadTime" color="#1e5138" values={ltValues} />
                   </div>
                   <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-[400px]">
-                    <h3 className="text-sm font-bold text-gray-700 mb-4">Cycle Time по задачам (scatter)</h3>
-                    <ScatterChart id="ct" rows={tableRows} field="cycleTime" color="#2c7a51" values={ctValues} />
+                    <h3 className="text-sm font-bold text-gray-700 mb-4">Dev Cycle Time по задачам (scatter)</h3>
+                    <ScatterChart id="ct" rows={tableRows} field="devCycleTime" color="#2c7a51" values={ctValues} />
+                  </div>
+                  <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-[400px]">
+                    <h3 className="text-sm font-bold text-gray-700 mb-4">Upstream Time по задачам (scatter)</h3>
+                    <ScatterChart id="upstream" rows={tableRows} field="upstreamTime" color="#7c3aed" values={upstreamValues} />
                   </div>
                   <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-[400px]">
                     <h3 className="text-sm font-bold text-gray-700 mb-4 text-center">Throughput (задач / неделю)</h3>
@@ -210,18 +221,32 @@ export default function App() {
                   </div>
                 </div>
 
-                <MonteCarlo issues={issues} workflows={workflows} queuePreset={queuePreset} />
+                <MonteCarlo issues={issues} queuePreset={queuePreset} />
 
-                <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 mb-6 flex flex-col h-auto overflow-hidden">
-                  <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-1.5">
-                    Aging WIP{' '}
-                    <span className="metric-tooltip">
-                      ℹ<span className="tooltip-text">
-                        Текущие задачи в работе, упорядоченные по времени в работе (дней с момента взятия в ctStart). Зелёный — до P50 CT, жёлтый — до P85, красный — выше P85.
+                {/* ── Aging WIP (split Upstream / Downstream) ── */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-auto overflow-hidden">
+                    <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-1.5">
+                      Upstream Aging WIP{' '}
+                      <span className="metric-tooltip">
+                        ℹ<span className="tooltip-text">
+                          Задачи в аналитике/подготовке. Возраст считается с первого входа в Upstream. Пороги — по Upstream Time P50/P85.
+                        </span>
                       </span>
-                    </span>
-                  </h3>
-                  <AgingWIP issues={issues} workflows={workflows} ctValues={ctValues} />
+                    </h3>
+                    <AgingWIP issues={issues} bucket="upstream" thresholdValues={upstreamValues} />
+                  </div>
+                  <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-auto overflow-hidden">
+                    <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-1.5">
+                      Downstream Aging WIP{' '}
+                      <span className="metric-tooltip">
+                        ℹ<span className="tooltip-text">
+                          Задачи в разработке/тестировании/релизе. Возраст считается с первого входа в Downstream. Пороги — по Dev Cycle Time P50/P85.
+                        </span>
+                      </span>
+                    </h3>
+                    <AgingWIP issues={issues} bucket="downstream" thresholdValues={ctValues} />
+                  </div>
                 </div>
 
                 <IssuesTable rows={tableRows} />
@@ -238,15 +263,6 @@ export default function App() {
             onIssuesCountChange={setRiceCount}
           />
         </div>
-
-        {activeTab === 'ai' && (
-          <AIAgentTab
-            issues={issues}
-            metrics={{ ltValues, ctValues, tpWeeks, wipNow, tableData: tableRows }}
-            workflows={workflows}
-            settings={settings}
-          />
-        )}
 
       </div>
     </div>

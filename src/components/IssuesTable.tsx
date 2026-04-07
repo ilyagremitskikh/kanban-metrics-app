@@ -59,7 +59,8 @@ export function IssuesTable({ rows }: Props) {
               {th('summary', 'Название')}
               {th('type', 'Тип')}
               {th('leadTime', 'Lead Time', 'text-right')}
-              {th('cycleTime', 'Cycle Time', 'text-right')}
+              {th('devCycleTime', 'Dev CT', 'text-right')}
+              {th('upstreamTime', 'Upstream', 'text-right')}
               {th('currentStatus', 'Статус')}
               {th('completedAt', 'Завершена')}
             </tr>
@@ -87,7 +88,10 @@ export function IssuesTable({ rows }: Props) {
                   {row.leadTime !== null ? `${fmtNum(row.leadTime)} d.` : <span className="text-gray-300 font-normal">—</span>}
                 </td>
                 <td className="px-3 py-3.5 align-middle text-right font-bold text-gray-700 whitespace-nowrap group-hover:text-donezo-dark transition-colors">
-                  {row.cycleTime !== null ? `${fmtNum(row.cycleTime)} d.` : <span className="text-gray-300 font-normal">—</span>}
+                  {row.devCycleTime !== null ? `${fmtNum(row.devCycleTime)} d.` : <span className="text-gray-300 font-normal">—</span>}
+                </td>
+                <td className="px-3 py-3.5 align-middle text-right font-bold text-gray-700 whitespace-nowrap group-hover:text-donezo-dark transition-colors">
+                  {row.upstreamTime !== null ? `${fmtNum(row.upstreamTime)} d.` : <span className="text-gray-300 font-normal">—</span>}
                 </td>
                 <td className="px-3 py-3.5 align-middle whitespace-nowrap">
                   <StatusBadge status={row.currentStatus} />

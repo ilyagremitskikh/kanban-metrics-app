@@ -3,13 +3,12 @@ import { Chart, registerables } from 'chart.js';
 import { runMCItems, runMCDate, runMCQueue, type MCResult, type QueueItemResult } from '../lib/monteCarlo';
 import { buildThroughputWeeksWithZeros } from '../lib/metrics';
 import { getWipNow } from '../lib/metrics';
-import type { Issue, MCMode, WorkflowConfig } from '../types';
+import type { Issue, MCMode } from '../types';
 
 Chart.register(...registerables);
 
 interface Props {
   issues: Issue[];
-  workflows: WorkflowConfig[];
   queuePreset?: string[] | null;
 }
 
@@ -31,13 +30,13 @@ const PCT_STYLES = {
 const inputCls = 'px-4 py-2 border border-gray-100 bg-gray-50 rounded-xl text-sm font-semibold outline-none transition-all duration-200 focus:bg-white focus:border-donezo-primary focus:ring-2 focus:ring-donezo-light';
 const btnPrimary = 'px-6 py-2.5 bg-donezo-dark text-white rounded-full text-sm font-bold cursor-pointer border-none transition-all duration-200 hover:bg-donezo-primary hover:-translate-y-0.5 hover:shadow-lg whitespace-nowrap';
 
-export function MonteCarlo({ issues, workflows, queuePreset }: Props) {
+export function MonteCarlo({ issues, queuePreset }: Props) {
   const [mode, setMode]             = useState<MCMode>('items');
   const [itemCount, setItemCount]   = useState(10);
   const [targetDate, setTargetDate] = useState('');
   const [result, setResult]         = useState<MCResult | null>(null);
   const [queueResult, setQueueResult] = useState<QueueItemResult[] | null>(null);
-  const [wipCount, setWipCount]     = useState(() => getWipNow(issues, workflows));
+  const [wipCount, setWipCount]     = useState(() => getWipNow(issues));
   const [queueItems, setQueueItems] = useState<string[]>(['', '', '']);
   const [error, setError]           = useState('');
 
@@ -47,7 +46,7 @@ export function MonteCarlo({ issues, workflows, queuePreset }: Props) {
   useEffect(() => {
     if (queuePreset && queuePreset.length > 0) {
       setQueueItems(queuePreset);
-      setWipCount(getWipNow(issues, workflows));
+      setWipCount(getWipNow(issues));
       setMode('queue');
       setQueueResult(null);
       setError('');
@@ -59,11 +58,11 @@ export function MonteCarlo({ issues, workflows, queuePreset }: Props) {
     setResult(null);
     setQueueResult(null);
     setError('');
-    if (m === 'queue') setWipCount(getWipNow(issues, workflows));
+    if (m === 'queue') setWipCount(getWipNow(issues));
   };
 
   const getSamples = () => {
-    const samples = buildThroughputWeeksWithZeros(issues, workflows);
+    const samples = buildThroughputWeeksWithZeros(issues);
     if (samples.length < 2) {
       setError('Недостаточно данных (нужно ≥ 2 недель Throughput)');
       return null;
