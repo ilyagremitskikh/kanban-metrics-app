@@ -51,6 +51,7 @@ export interface SortState {
 export interface Settings {
   webhookUrl: string;
   throughputWebhookUrl?: string;
+  jiraBaseUrl?: string;
   mode: JQLMode;
   projectKey: string;
   issueTypes: string[];
@@ -64,13 +65,108 @@ export interface RiceIssue {
   labels: string;
   priority: string;
   status: string;
+  // RICE fields (User Story / Задача)
   reach: number | null;
   impact: number | null;
   confidence: number | null;
   effort: number | null;
   rice_score: number | null;
-  severity: string | null;
-  bug_priority: string | null;
-  bug_score: number | null;
-  cost_of_delay: number | null;
+  // Bug fields (FinTech Defect Scoring: R + P + S + W)
+  bug_risk:       number | null;  // R: Финансовые/юридические/репутационные риски (40/15/0)
+  bug_process:    number | null;  // P: Влияние на кредитный конвейер (30/10/2)
+  bug_scale:      number | null;  // S: Масштаб проблемы (15/8/2)
+  bug_workaround: number | null;  // W: Наличие обходного пути (15/7/1)
+  bug_score:      number | null;  // Итого: R + P + S + W (макс. 100)
+  // Tech Debt fields (Impact / Effort Matrix)
+  td_impact: number | null;  // Влияние от решения (1–10)
+  td_effort: number | null;  // Трудозатраты (1–10)
+  td_roi:    number | null;  // ROI = Impact / Effort
+}
+
+// ── Jira Issues & AI Assistant ────────────────────────────────────────────────
+
+export interface ChecklistItem {
+  name: string;
+  checked: boolean;
+  mandatory: boolean;
+  rank: number;
+  isHeader: boolean;
+  id?: number;
+  assigneeIds?: string[];
+  status?: string | null;
+}
+
+export interface JiraIssueShort {
+  key: string;
+  summary: string;
+  status: string;
+  priority: string;
+  issuetype: string;
+  description?: string;
+  project?: string;
+  assignee?: string;
+  reporter?: string;
+  labels?: string[];
+  created?: string;
+  updated?: string;
+  needToUpdateSource?: string;
+  slService?: string;
+  productCatalog?: string;
+}
+
+export interface JiraComment {
+  author: string;
+  body: string;
+  created: string;
+}
+
+export interface JiraAttachment {
+  filename: string;
+  mimeType: string;
+  url: string;
+}
+
+export interface JiraIssueDetailed extends JiraIssueShort {
+  comments: JiraComment[];
+  attachments_info: JiraAttachment[];
+  checklists: ChecklistItem[];
+}
+
+export interface CreateIssueRequest {
+  summary: string;
+  description: string;
+  priority: string;
+  issuetype: string;
+  needToUpdateSource: string;
+  slService: string;
+  productCatalog: string;
+  labels?: string[];
+  checklists?: ChecklistItem[];
+}
+
+export interface UpdateIssueRequest {
+  summary?: string;
+  description?: string;
+  priority?: string;
+  issuetype?: string;
+  needToUpdateSource?: string;
+  slService?: string;
+  productCatalog?: string;
+  labels?: string[];
+  checklists?: ChecklistItem[];
+}
+
+export interface OptimizeContext {
+  issue_type?: string;
+  summary?: string;
+  description?: string;
+  comments?: JiraComment[];
+}
+
+export interface AiGenerateResponse {
+  summary: string;
+  description: string;
+  priority: string;
+  issuetype: string;
+  checklists?: ChecklistItem[];
 }

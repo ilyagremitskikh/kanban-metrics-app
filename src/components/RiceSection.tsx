@@ -14,15 +14,21 @@ const IMPACT_LABELS: Record<string, string> = {
   '0.25': 'Minimal', '0.5': 'Low', '1': 'Medium', '2': 'High', '3': 'Massive',
 };
 
-const SEVERITY_OPTIONS  = ['Critical', 'High', 'Medium', 'Low'] as const;
-const BUG_PRIO_OPTIONS  = ['Critical', 'High', 'Medium', 'Low'] as const;
-const SEVERITY_WEIGHTS: Record<string, number> = { Critical: 4, High: 3, Medium: 2, Low: 1 };
-const PRIORITY_WEIGHTS: Record<string, number> = { Critical: 4, High: 3, Medium: 2, Low: 1 };
+// FinTech Defect Scoring Model — discrete option sets (R / P / S / W)
+const BUG_RISK_OPTIONS    = [0, 15, 40] as const;
+const BUG_PROCESS_OPTIONS = [2, 10, 30] as const;
+const BUG_SCALE_OPTIONS   = [2, 8,  15] as const;
+const BUG_WA_OPTIONS      = [1, 7,  15] as const;
+
+const BUG_RISK_LABELS:    Record<number, string> = { 40: 'Фин. риск / Закон / ИБ', 15: 'Массовые жалобы', 0: 'Нет влияния' };
+const BUG_PROCESS_LABELS: Record<number, string> = { 30: 'Блокирует выдачу', 10: 'Частичный сбой', 2: 'Косметика' };
+const BUG_SCALE_LABELS:   Record<number, string> = { 15: 'Все клиенты', 8: 'Сегмент / Редко', 2: 'Единичные случаи' };
+const BUG_WA_LABELS:      Record<number, string> = { 15: 'Нет пути / Нужны технари', 7: 'Ручная поддержка', 1: 'Клиент сам обойдёт' };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ScoreRow { reach: string; impact: string; confidence: string; effort: string }
-interface BugRow   { severity: string; bug_priority: string }
-interface TdRow    { cost_of_delay: string }
+interface BugRow   { bug_risk: string; bug_process: string; bug_scale: string; bug_workaround: string }
+interface TdRow    { td_impact: string; td_effort: string }
 
 type ScoringTab = 'rice' | 'bugs' | 'techdebt';
 
@@ -36,8 +42,28 @@ function calcScore(row: ScoreRow): number | null {
 }
 
 function calcBugScore(row: BugRow): number | null {
-  if (!row.severity || !row.bug_priority) return null;
-  return (SEVERITY_WEIGHTS[row.severity] ?? 0) * (PRIORITY_WEIGHTS[row.bug_priority] ?? 0);
+  // Check empty strings explicitly — bug_risk can be "0" (valid value)
+  if (row.bug_risk === '' || row.bug_process === '' || row.bug_scale === '' || row.bug_workaround === '') return null;
+  const r = parseFloat(row.bug_risk), p = parseFloat(row.bug_process),
+        s = parseFloat(row.bug_scale), w = parseFloat(row.bug_workaround);
+  if (isNaN(r) || isNaN(p) || isNaN(s) || isNaN(w)) return null;
+  return r + p + s + w;
+}
+
+function calcTdRoi(row: TdRow): number | null {
+  if (!row.td_impact || !row.td_effort) return null;
+  const i = parseFloat(row.td_impact), e = parseFloat(row.td_effort);
+  if (isNaN(i) || isNaN(e) || e === 0) return null;
+  return Math.round((i / e) * 100) / 100;
+}
+
+function tdQuadrant(impact: string, effort: string): { label: string; cls: string; order: number } | null {
+  const i = parseFloat(impact), e = parseFloat(effort);
+  if (isNaN(i) || isNaN(e)) return null;
+  if (i > 5 && e <= 5) return { label: 'Быстрая победа', cls: 'bg-emerald-100 text-emerald-700', order: 1 };
+  if (i > 5 && e > 5)  return { label: 'Крупный проект', cls: 'bg-blue-100 text-blue-700',       order: 2 };
+  if (i <= 5 && e <= 5) return { label: 'Фоновая задача', cls: 'bg-amber-50 text-amber-700',      order: 3 };
+  return { label: 'Трата времени', cls: 'bg-red-100 text-red-700', order: 4 };
 }
 
 // ── Row initialisers ──────────────────────────────────────────────────────────
@@ -52,13 +78,18 @@ function initRow(issue: RiceIssue): ScoreRow {
 
 function initBugRow(issue: RiceIssue): BugRow {
   return {
-    severity:     issue.severity     ?? '',
-    bug_priority: issue.bug_priority ?? '',
+    bug_risk:       issue.bug_risk       != null ? String(issue.bug_risk)       : '',
+    bug_process:    issue.bug_process    != null ? String(issue.bug_process)    : '',
+    bug_scale:      issue.bug_scale      != null ? String(issue.bug_scale)      : '',
+    bug_workaround: issue.bug_workaround != null ? String(issue.bug_workaround) : '',
   };
 }
 
 function initTdRow(issue: RiceIssue): TdRow {
-  return { cost_of_delay: issue.cost_of_delay != null ? String(issue.cost_of_delay) : '' };
+  return {
+    td_impact: issue.td_impact != null ? String(issue.td_impact) : '',
+    td_effort: issue.td_effort != null ? String(issue.td_effort) : '',
+  };
 }
 
 // ── Badge colours ─────────────────────────────────────────────────────────────
@@ -72,19 +103,17 @@ function scoreBadgeCls(score: number | null, max: number): string {
 
 function bugScoreCls(score: number | null): string {
   if (score === null) return '';
-  if (score >= 12) return 'bg-red-100 text-red-700';
-  if (score >= 8)  return 'bg-orange-100 text-orange-700';
-  if (score >= 4)  return 'bg-amber-50 text-amber-700';
+  if (score >= 75) return 'bg-red-100 text-red-700';
+  if (score >= 50) return 'bg-orange-100 text-orange-700';
+  if (score >= 20) return 'bg-amber-50 text-amber-700';
   return 'bg-slate-100 text-slate-500';
 }
 
-function tdCls(val: string): string {
-  const h = parseFloat(val);
-  if (isNaN(h) || val === '') return '';
-  if (h > 10) return 'bg-red-100 text-red-700';
-  if (h >= 5) return 'bg-orange-100 text-orange-700';
-  if (h >= 2) return 'bg-amber-50 text-amber-700';
-  return 'bg-slate-100 text-slate-500';
+function bugSlaLabel(score: number): string {
+  if (score >= 75) return 'BLOCKER';
+  if (score >= 50) return 'CRITICAL';
+  if (score >= 20) return 'MAJOR';
+  return 'MINOR';
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -107,27 +136,14 @@ function ChipSelect({ options, value, onChange, disabled, fmt = String }: {
   );
 }
 
-function StringChipSelect({ options, value, onChange, disabled }: {
-  options: readonly string[]; value: string; onChange: (v: string) => void; disabled?: boolean;
-}) {
-  return (
-    <div className="flex gap-1 flex-wrap">
-      {options.map((opt) => (
-        <button key={opt} disabled={disabled}
-          className={`px-3 py-1.5 border rounded-full text-xs font-bold whitespace-nowrap leading-none transition-all duration-200 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:-translate-y-0.5'} ${value === opt ? 'bg-donezo-dark border-donezo-dark text-white shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:border-donezo-primary hover:text-donezo-primary hover:bg-donezo-light'}`}
-          onClick={() => { if (!disabled) onChange(value === opt ? '' : opt); }}
-        >{opt}</button>
-      ))}
-    </div>
-  );
-}
 
-function Stepper({ value, onChange, disabled }: {
+function Stepper({ value, onChange, disabled, min = EFFORT_MIN, max = EFFORT_MAX, step = EFFORT_STEP }: {
   value: string; onChange: (v: string) => void; disabled?: boolean;
+  min?: number; max?: number; step?: number;
 }) {
   const num = parseFloat(value) || 0;
-  const dec = (n: number) => onChange(String(Math.max(EFFORT_MIN, +(n - EFFORT_STEP).toFixed(1))));
-  const inc = (n: number) => onChange(String(Math.min(EFFORT_MAX, +(n + EFFORT_STEP).toFixed(1))));
+  const dec = (n: number) => onChange(String(Math.max(min, +(n - step).toFixed(1))));
+  const inc = (n: number) => onChange(String(Math.min(max, +(n + step).toFixed(1))));
   return (
     <div className={`inline-flex items-center border rounded-full overflow-hidden transition-colors ${disabled ? 'border-gray-100 bg-gray-50' : 'border-gray-200 bg-white focus-within:border-donezo-primary focus-within:ring-2 focus-within:ring-donezo-light'}`}>
       <button disabled={disabled}
@@ -135,7 +151,7 @@ function Stepper({ value, onChange, disabled }: {
         onClick={() => { if (!disabled) dec(num); }}>−</button>
       <input disabled={disabled}
         className={`w-12 text-center text-sm font-bold border-none outline-none h-10 no-spinner transition-colors text-slate-900 caret-slate-900 ${disabled ? 'bg-transparent text-gray-400' : 'bg-white'}`}
-        type="number" min={EFFORT_MIN} max={EFFORT_MAX} step={EFFORT_STEP} value={value}
+        type="number" min={min} max={max} step={step} value={value}
         onChange={(e) => { if (!disabled) onChange(e.target.value); }} />
       <button disabled={disabled}
         className={`w-9 h-10 border-none text-gray-700 text-xl font-bold leading-none flex items-center justify-center flex-shrink-0 transition-colors ${disabled ? 'opacity-50 cursor-not-allowed bg-transparent' : 'cursor-pointer bg-gray-50 hover:bg-donezo-light hover:text-donezo-primary'}`}
@@ -241,15 +257,20 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
           if (!row) return [];
           const bug_score = calcBugScore(row);
           if (bug_score === null) return [];
-          return [{ key: issue.key, reach: null, impact: null, confidence: null, effort: null, rice_score: null, severity: row.severity, bug_priority: row.bug_priority, bug_score, cost_of_delay: null }];
+          return [{ key: issue.key, reach: null, impact: null, confidence: null, effort: null, rice_score: null,
+            bug_risk: parseFloat(row.bug_risk), bug_process: parseFloat(row.bug_process),
+            bug_scale: parseFloat(row.bug_scale), bug_workaround: parseFloat(row.bug_workaround),
+            bug_score, td_impact: null, td_effort: null, td_roi: null }];
         }
 
         if (issue.issue_type === 'Техдолг') {
           const row = tdScores.get(issue.key);
           if (!row) return [];
-          const cod = parseFloat(row.cost_of_delay);
-          if (isNaN(cod) || cod < 0) return [];
-          return [{ key: issue.key, reach: null, impact: null, confidence: null, effort: null, rice_score: null, severity: null, bug_priority: null, bug_score: null, cost_of_delay: cod }];
+          const td_roi = calcTdRoi(row);
+          if (td_roi === null) return [];
+          return [{ key: issue.key, reach: null, impact: null, confidence: null, effort: null, rice_score: null,
+            bug_risk: null, bug_process: null, bug_scale: null, bug_workaround: null, bug_score: null,
+            td_impact: parseFloat(row.td_impact), td_effort: parseFloat(row.td_effort), td_roi }];
         }
 
         // User Story / Задача → RICE
@@ -257,7 +278,9 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
         if (!row) return [];
         const rice_score = calcScore(row);
         if (rice_score === null) return [];
-        return [{ key: issue.key, reach: parseFloat(row.reach), impact: parseFloat(row.impact), confidence: parseFloat(row.confidence), effort: parseFloat(row.effort), rice_score, severity: null, bug_priority: null, bug_score: null, cost_of_delay: null }];
+        return [{ key: issue.key, reach: parseFloat(row.reach), impact: parseFloat(row.impact), confidence: parseFloat(row.confidence), effort: parseFloat(row.effort), rice_score,
+          bug_risk: null, bug_process: null, bug_scale: null, bug_workaround: null, bug_score: null,
+          td_impact: null, td_effort: null, td_roi: null }];
       });
 
       if (!updates.length) { setMsg({ text: 'Нет задач с корректно заполненными оценками для сохранения', ok: false }); return; }
@@ -287,9 +310,9 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
     setBugScores(prev => { const m = new Map(prev); m.set(key, { ...m.get(key)!, [field]: value }); return m; });
   };
 
-  const setTdField = (key: string, value: string) => {
+  const setTdField = (key: string, field: keyof TdRow, value: string) => {
     markDirty(key);
-    setTdScores(prev => { const m = new Map(prev); m.set(key, { cost_of_delay: value }); return m; });
+    setTdScores(prev => { const m = new Map(prev); m.set(key, { ...m.get(key)!, [field]: value }); return m; });
   };
 
   const setUrgent9999 = (key: string) => {
@@ -324,18 +347,23 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
   }), [bugIssues, bugSortField, bugSortDir]);
 
   const sortedTd = useMemo(() => [...tdIssues].sort((a, b) => {
-    const va = parseFloat(tdScores.get(a.key)?.cost_of_delay ?? '') || -1;
-    const vb = parseFloat(tdScores.get(b.key)?.cost_of_delay ?? '') || -1;
-    return tdSortDir === 'desc' ? vb - va : va - vb;
+    const rowA = tdScores.get(a.key) ?? initTdRow(a);
+    const rowB = tdScores.get(b.key) ?? initTdRow(b);
+    const qA = tdQuadrant(rowA.td_impact, rowA.td_effort)?.order ?? 99;
+    const qB = tdQuadrant(rowB.td_impact, rowB.td_effort)?.order ?? 99;
+    if (qA !== qB) return tdSortDir === 'desc' ? qA - qB : qB - qA;
+    const roiA = calcTdRoi(rowA) ?? -1;
+    const roiB = calcTdRoi(rowB) ?? -1;
+    return tdSortDir === 'desc' ? roiB - roiA : roiA - roiB;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [tdIssues, tdSortDir]);
+  }), [tdIssues, tdSortDir, sortTrigger]);
 
   // ── Derived stats ─────────────────────────────────────────────────────────
   const riceScoreValues = sortedRice.map(i => calcScore(scores.get(i.key)!)).filter((s): s is number => s !== null);
   const maxRiceScore    = riceScoreValues.length ? Math.max(...riceScoreValues) : 0;
   const scoredRice      = riceScoreValues.length;
   const scoredBugs      = bugIssues.filter(i => calcBugScore(bugScores.get(i.key)!) !== null).length;
-  const scoredTd        = tdIssues.filter(i => { const v = parseFloat(tdScores.get(i.key)?.cost_of_delay ?? ''); return !isNaN(v) && v >= 0; }).length;
+  const scoredTd        = tdIssues.filter(i => calcTdRoi(tdScores.get(i.key) ?? initTdRow(i)) !== null).length;
 
   // ── Send to MC queue ──────────────────────────────────────────────────────
   const sendToQueue = async () => {
@@ -366,8 +394,8 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
 
   const currentTabTitle = {
     rice:     'RICE Приоритизация',
-    bugs:     'Severity × Priority',
-    techdebt: 'Cost of Delay',
+    bugs:     'FinTech: Defect Scoring Model',
+    techdebt: 'Impact / Effort Matrix',
   }[scoringTab];
 
   // ── Current tab has items ─────────────────────────────────────────────────
@@ -414,8 +442,8 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
                 </svg>
               </span>
               {scoringTab === 'rice'     && 'Что такое метод RICE и как он считается?'}
-              {scoringTab === 'bugs'     && 'Как приоритизировать баги: Severity × Priority'}
-              {scoringTab === 'techdebt' && 'Как приоритизировать техдолг: Cost of Delay'}
+              {scoringTab === 'bugs'     && 'Как приоритизировать баги: FinTech Defect Scoring Model'}
+              {scoringTab === 'techdebt' && 'Как приоритизировать техдолг: Impact / Effort Matrix'}
             </div>
             <svg className="w-5 h-5 text-gray-400 transition-transform duration-300 group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -460,32 +488,53 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
             {/* Bugs guide */}
             {scoringTab === 'bugs' && (
               <>
-                <p>Классический <strong>ITIL-подход</strong> — разделяет техническое состояние и бизнес-влияние:</p>
+                <p><strong>FinTech Defect Scoring Model</strong> — реактивная оценка инцидентов, учитывающая специфику финансовых продуктов. Формула: <strong>Score = R + P + S + W</strong> (макс. 100)</p>
                 <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                    <strong className="block text-slate-900 mb-2">🔬 Severity (Критичность)</strong>
-                    Насколько сильно сломана система <em>технически</em>.
+                    <strong className="block text-slate-900 mb-2">R — Риски (макс. 40)</strong>
+                    Финансовые, юридические, репутационные последствия.
                     <ul className="mt-2 space-y-1 text-xs text-gray-500">
-                      <li><span className="font-bold text-red-600">Critical (4)</span> — падение БД, полная недоступность</li>
-                      <li><span className="font-bold text-orange-600">High (3)</span> — ключевая функция не работает</li>
-                      <li><span className="font-bold text-amber-600">Medium (2)</span> — частичная деградация</li>
-                      <li><span className="font-bold text-slate-500">Low (1)</span> — косметика, неудобство</li>
+                      <li><span className="font-bold text-red-600">40</span> — Потеря денег / уязвимость ИБ / нарушение закона ЦБ</li>
+                      <li><span className="font-bold text-orange-600">15</span> — Жалобы в саппорт, простой бэк-офиса</li>
+                      <li><span className="font-bold text-slate-500">0</span> — Прямого влияния нет</li>
                     </ul>
                   </li>
                   <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                    <strong className="block text-slate-900 mb-2">🚨 Priority (Приоритет)</strong>
-                    Насколько срочно нужно исправить <em>для бизнеса</em>.
+                    <strong className="block text-slate-900 mb-2">P — Процесс (макс. 30)</strong>
+                    Влияние на кредитный конвейер.
                     <ul className="mt-2 space-y-1 text-xs text-gray-500">
-                      <li><span className="font-bold text-red-600">Critical (4)</span> — исправить немедленно</li>
-                      <li><span className="font-bold text-orange-600">High (3)</span> — исправить в текущем спринте</li>
-                      <li><span className="font-bold text-amber-600">Medium (2)</span> — следующий спринт</li>
-                      <li><span className="font-bold text-slate-500">Low (1)</span> — бэклог</li>
+                      <li><span className="font-bold text-red-600">30</span> — Блокирует выдачу, скоринг, подписание, погашение</li>
+                      <li><span className="font-bold text-orange-600">10</span> — Процесс работает с деградацией</li>
+                      <li><span className="font-bold text-slate-500">2</span> — Косметический дефект</li>
+                    </ul>
+                  </li>
+                  <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                    <strong className="block text-slate-900 mb-2">S — Масштаб (макс. 15)</strong>
+                    Охват затронутых клиентов.
+                    <ul className="mt-2 space-y-1 text-xs text-gray-500">
+                      <li><span className="font-bold text-red-600">15</span> — Все клиенты или флагманский продукт</li>
+                      <li><span className="font-bold text-orange-600">8</span> — Узкий сегмент или редкий сценарий</li>
+                      <li><span className="font-bold text-slate-500">2</span> — Единичные уникальные случаи</li>
+                    </ul>
+                  </li>
+                  <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                    <strong className="block text-slate-900 mb-2">W — Workaround (макс. 15)</strong>
+                    Есть ли обходной путь.
+                    <ul className="mt-2 space-y-1 text-xs text-gray-500">
+                      <li><span className="font-bold text-red-600">15</span> — Нет пути / нужно вмешательство технарей (БД/скрипты)</li>
+                      <li><span className="font-bold text-orange-600">7</span> — Решается вручную L1/L2 поддержкой</li>
+                      <li><span className="font-bold text-slate-500">1</span> — Клиент может сам (перезагрузить, повторить)</li>
                     </ul>
                   </li>
                 </ul>
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm text-xs text-gray-600">
-                  <strong className="block text-slate-900 mb-1">Итоговый Score = Severity × Priority (1–16)</strong>
-                  <span className="text-gray-400">Пример: упавшая БД на тест-стенде → Severity Critical (4) × Priority Medium (2) = 8. Сломанная кнопка оплаты на проде → Severity Low (1) × Priority Critical (4) = 4.</span>
+                  <strong className="block text-slate-900 mb-2">SLA-матрица реагирования:</strong>
+                  <ul className="space-y-1">
+                    <li><span className="font-bold text-red-600">≥ 75 → BLOCKER</span> — Немедленный хотфикс, инцидент-команда, остановка релизов</li>
+                    <li><span className="font-bold text-orange-600">50–74 → CRITICAL</span> — Высший приоритет, исправление в течение 24–48 ч</li>
+                    <li><span className="font-bold text-amber-600">20–49 → MAJOR</span> — Плановое исправление в текущем или следующем спринте</li>
+                    <li><span className="font-bold text-slate-500">&lt; 20 → MINOR</span> — Бэклог, исправляется по остаточному принципу</li>
+                  </ul>
                 </div>
               </>
             )}
@@ -493,18 +542,29 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
             {/* Tech Debt guide */}
             {scoringTab === 'techdebt' && (
               <>
-                <p><strong>Cost of Delay</strong> — сколько времени команда теряет <em>каждую неделю</em> из-за того, что задача не сделана.</p>
-                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                  <strong className="block text-slate-900 mb-2">Как оценивать:</strong>
-                  <p className="text-gray-600 mb-2">Подумайте: если эта задача останется несделанной ещё 7 дней — сколько часов работы команды это «съест» впустую?</p>
-                  <ul className="space-y-1 text-xs text-gray-500">
-                    <li><span className="font-bold text-red-600">&gt;10 ч/нед</span> — критический тормоз, брать немедленно</li>
-                    <li><span className="font-bold text-orange-600">5–10 ч/нед</span> — высокий приоритет</li>
-                    <li><span className="font-bold text-amber-600">2–5 ч/нед</span> — средний приоритет</li>
-                    <li><span className="font-bold text-slate-500">&lt;2 ч/нед</span> — низкий приоритет</li>
+                <p><strong>Impact / Effort Matrix</strong> — максимизирует ROI от времени разработчиков. Задачи ранжируются по коэффициенту: <strong>ROI = Impact ÷ Effort</strong></p>
+                <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                    <strong className="block text-slate-900 mb-1">Impact (Влияние) — 1–10</strong>
+                    Какую пользу принесёт решение: ускорение работы, снижение нагрузки, устранение боли разработчиков.
+                    <div className="mt-2 text-xs text-gray-400">10 = огромная польза, 1 = почти никакой</div>
+                  </li>
+                  <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                    <strong className="block text-slate-900 mb-1">Effort (Усилия) — 1–10</strong>
+                    Сколько времени, денег и человеческих ресурсов потребуется на реализацию.
+                    <div className="mt-2 text-xs text-gray-400">10 = огромные затраты, 1 = минимум усилий</div>
+                  </li>
+                </ul>
+                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm text-xs text-gray-600">
+                  <strong className="block text-slate-900 mb-2">Матрица квадрантов (порог = 5):</strong>
+                  <ul className="space-y-1">
+                    <li><span className="font-bold text-emerald-700">Быстрая победа</span> — Impact &gt; 5, Effort ≤ 5 → Высший приоритет, максимальный ROI</li>
+                    <li><span className="font-bold text-blue-700">Крупный проект</span> — Impact &gt; 5, Effort &gt; 5 → Стратегический долг, брать дозированно</li>
+                    <li><span className="font-bold text-amber-700">Фоновая задача</span> — Impact ≤ 5, Effort ≤ 5 → Делать в свободное время</li>
+                    <li><span className="font-bold text-red-700">Трата времени</span> — Impact ≤ 5, Effort &gt; 5 → Заморозить или удалить из бэклога</li>
                   </ul>
                 </div>
-                <p className="text-xs text-gray-400">Задачи отсортированы по убыванию Cost of Delay — самые дорогие вверху.</p>
+                <p className="text-xs text-gray-400">Задачи отсортированы по убыванию ROI — «быстрые победы» с наивысшим коэффициентом вверху.</p>
               </>
             )}
           </div>
@@ -525,7 +585,7 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
           </button>
           {issues.length > 0 && (
             <>
-              {scoringTab === 'rice' && (
+              {(scoringTab === 'rice' || scoringTab === 'techdebt') && (
                 <button
                   className={`${btnSecondary} flex items-center justify-center min-w-[36px] px-2 leading-none`}
                   onClick={() => setSortTrigger(t => t + 1)}
@@ -567,8 +627,8 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
           <div className="text-center">
             <div className="text-base font-medium text-gray-600 mb-2">
               {scoringTab === 'rice'     && <>RICE = <strong>Reach</strong> × <strong>Impact</strong> × <strong>Confidence%</strong> / <strong>Effort</strong></>}
-              {scoringTab === 'bugs'     && <>Severity × Priority → автоматический балл приоритизации</>}
-              {scoringTab === 'techdebt' && <>Cost of Delay = часов теряет команда каждую неделю</>}
+              {scoringTab === 'bugs'     && <>Score = <strong>R</strong> (Риски) + <strong>P</strong> (Процесс) + <strong>S</strong> (Масштаб) + <strong>W</strong> (Workaround)</>}
+              {scoringTab === 'techdebt' && <>ROI = <strong>Impact</strong> ÷ <strong>Effort</strong> → Квадранты приоритизации</>}
             </div>
             <div className="text-sm text-gray-400">Нажмите «Загрузить из Jira» чтобы начать оценку</div>
           </div>
@@ -741,7 +801,7 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
       )}
 
       {/* ════════════════════════════════════════════════════════════════════
-          TAB: BUGS (Severity × Priority)
+          TAB: BUGS (FinTech Defect Scoring: R + P + S + W)
       ════════════════════════════════════════════════════════════════════ */}
       {scoringTab === 'bugs' && sortedBugs.length > 0 && (
         <div className="overflow-auto max-h-[65vh] bg-white rounded-3xl border border-gray-100 px-2 pb-2">
@@ -755,19 +815,28 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
                 </th>
                 <th className={`${thBase}`}>Summary</th>
                 <th className={`w-36 ${thBase}`}>Статус</th>
-                <th className={`w-72 ${thBase}`}>
-                  Severity
-                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">критичность технически</span>
+                <th className={`w-64 ${thBase}`}>
+                  R — Риски
+                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">Фин./юрид./репутационные</span>
                 </th>
-                <th className={`w-72 ${thBase}`}>
-                  Priority
-                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">срочность для бизнеса</span>
+                <th className={`w-56 ${thBase}`}>
+                  P — Процесс
+                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">Кредитный конвейер</span>
                 </th>
-                <th className={`w-24 text-center ${thSort}`}
+                <th className={`w-56 ${thBase}`}>
+                  S — Масштаб
+                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">Охват проблемы</span>
+                </th>
+                <th className={`w-56 ${thBase}`}>
+                  W — Workaround
+                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">Обходной путь</span>
+                </th>
+                <th className={`w-28 text-center ${thSort}`}
                   onClick={() => { if (bugSortField === 'score') setBugSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBugSortField('score'); setBugSortDir('desc'); } }}>
                   <div className="flex items-center justify-center gap-1">
                     Score <SortChevron active={bugSortField === 'score'} dir={bugSortDir} />
                   </div>
+                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">макс. 100</span>
                 </th>
               </tr>
             </thead>
@@ -785,17 +854,34 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
                     <td className="px-3 py-2.5 align-middle text-slate-900 min-w-[200px]">{issue.summary}</td>
                     <td className="px-3 py-2.5 align-middle text-xs text-gray-500 whitespace-nowrap">{issue.status}</td>
                     <td className="px-3 py-2.5 align-middle">
-                      <StringChipSelect options={SEVERITY_OPTIONS} value={row.severity}
-                        onChange={(v) => setBugField(issue.key, 'severity', v)} disabled={saving} />
+                      <ChipSelect options={[...BUG_RISK_OPTIONS]} value={row.bug_risk}
+                        onChange={(v) => setBugField(issue.key, 'bug_risk', v)} disabled={saving}
+                        fmt={(v) => BUG_RISK_LABELS[v]} />
                     </td>
                     <td className="px-3 py-2.5 align-middle">
-                      <StringChipSelect options={BUG_PRIO_OPTIONS} value={row.bug_priority}
-                        onChange={(v) => setBugField(issue.key, 'bug_priority', v)} disabled={saving} />
+                      <ChipSelect options={[...BUG_PROCESS_OPTIONS]} value={row.bug_process}
+                        onChange={(v) => setBugField(issue.key, 'bug_process', v)} disabled={saving}
+                        fmt={(v) => BUG_PROCESS_LABELS[v]} />
+                    </td>
+                    <td className="px-3 py-2.5 align-middle">
+                      <ChipSelect options={[...BUG_SCALE_OPTIONS]} value={row.bug_scale}
+                        onChange={(v) => setBugField(issue.key, 'bug_scale', v)} disabled={saving}
+                        fmt={(v) => BUG_SCALE_LABELS[v]} />
+                    </td>
+                    <td className="px-3 py-2.5 align-middle">
+                      <ChipSelect options={[...BUG_WA_OPTIONS]} value={row.bug_workaround}
+                        onChange={(v) => setBugField(issue.key, 'bug_workaround', v)} disabled={saving}
+                        fmt={(v) => BUG_WA_LABELS[v]} />
                     </td>
                     <td className="px-3 py-2.5 text-center align-middle">
-                      {score !== null
-                        ? <span className={`inline-block text-sm font-bold px-3 py-1 rounded-full min-w-[40px] text-center transition-all ${bugScoreCls(score)}`}>{score}</span>
-                        : <span className="text-gray-300 text-base">—</span>}
+                      {score !== null ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <span className={`inline-block text-sm font-bold px-3 py-1 rounded-full min-w-[48px] text-center transition-all ${bugScoreCls(score)}`}>{score}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${bugScoreCls(score)}`}>{bugSlaLabel(score)}</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-300 text-base">—</span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -806,7 +892,7 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
       )}
 
       {/* ════════════════════════════════════════════════════════════════════
-          TAB: TECH DEBT (Cost of Delay)
+          TAB: TECH DEBT (Impact / Effort Matrix)
       ════════════════════════════════════════════════════════════════════ */}
       {scoringTab === 'techdebt' && sortedTd.length > 0 && (
         <div className="overflow-auto max-h-[65vh] bg-white rounded-3xl border border-gray-100 px-2 pb-2">
@@ -817,47 +903,54 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
                 <th className={`w-28 ${thBase}`}>Задача</th>
                 <th className={`${thBase}`}>Summary</th>
                 <th className={`w-36 ${thBase}`}>Статус</th>
-                <th className={`w-52 ${thBase}`}>
-                  Cost of Delay
-                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">часов/неделю</span>
+                <th className={`w-44 ${thBase}`}>
+                  Impact
+                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">ценность решения (1–10)</span>
                 </th>
-                <th className={`w-28 text-center ${thSort}`}
+                <th className={`w-44 ${thBase}`}>
+                  Effort
+                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">трудозатраты (1–10)</span>
+                </th>
+                <th className={`w-36 text-center ${thSort}`}
                   onClick={() => setTdSortDir(d => d === 'asc' ? 'desc' : 'asc')}>
                   <div className="flex items-center justify-center gap-1">
-                    CoD <SortChevron active={true} dir={tdSortDir} />
+                    ROI <SortChevron active={true} dir={tdSortDir} />
                   </div>
+                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">Impact ÷ Effort</span>
                 </th>
               </tr>
             </thead>
             <tbody>
               {sortedTd.map((issue, idx) => {
-                const row  = tdScores.get(issue.key)!;
-                const val  = parseFloat(row.cost_of_delay);
-                const hasVal = !isNaN(val) && row.cost_of_delay !== '';
+                const row = tdScores.get(issue.key)!;
+                const roi = calcTdRoi(row);
+                const q   = tdQuadrant(row.td_impact, row.td_effort);
                 return (
                   <tr key={issue.key} className="border-b border-gray-50 last:border-none hover:bg-donezo-light/30 transition-colors duration-200">
                     <td className="px-3 py-3.5 text-center text-xs font-bold text-gray-400 align-middle relative">
                       {dirtyKeys.has(issue.key) && <div className="absolute left-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-orange-400 shadow-sm" title="Несохраненные изменения" />}
-                      {hasVal ? idx + 1 : '—'}
+                      {roi !== null ? idx + 1 : '—'}
                     </td>
                     <IssueLink issueKey={issue.key} isDirty={false} />
                     <td className="px-3 py-2.5 align-middle text-slate-900 min-w-[200px]">{issue.summary}</td>
                     <td className="px-3 py-2.5 align-middle text-xs text-gray-500 whitespace-nowrap">{issue.status}</td>
                     <td className="px-3 py-2.5 align-middle">
-                      <div className="flex items-center gap-2">
-                        <input
-                          className={`w-24 px-3 py-2 border rounded-xl text-sm font-semibold outline-none no-spinner transition-all duration-200 text-slate-900 caret-slate-900 ${saving ? 'bg-transparent text-gray-400 border-transparent' : 'bg-gray-50 border-gray-100 focus:border-donezo-primary focus:bg-white focus:ring-2 focus:ring-donezo-light'}`}
-                          type="number" min={0} step={0.5} placeholder="0"
-                          value={row.cost_of_delay} disabled={saving}
-                          onChange={(e) => setTdField(issue.key, e.target.value)}
-                        />
-                        <span className="text-xs text-gray-400 whitespace-nowrap">ч/нед</span>
-                      </div>
+                      <Stepper value={row.td_impact} onChange={(v) => setTdField(issue.key, 'td_impact', v)}
+                        disabled={saving} min={1} max={10} step={1} />
+                    </td>
+                    <td className="px-3 py-2.5 align-middle">
+                      <Stepper value={row.td_effort} onChange={(v) => setTdField(issue.key, 'td_effort', v)}
+                        disabled={saving} min={1} max={10} step={1} />
                     </td>
                     <td className="px-3 py-2.5 text-center align-middle">
-                      {hasVal
-                        ? <span className={`inline-block text-sm font-bold px-3 py-1 rounded-full min-w-[48px] text-center transition-all ${tdCls(row.cost_of_delay)}`}>{val}</span>
-                        : <span className="text-gray-300 text-base">—</span>}
+                      {roi !== null && q ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <span className={`inline-block text-sm font-bold px-3 py-1 rounded-full min-w-[48px] text-center transition-all ${q.cls}`}>{roi}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${q.cls}`}>{q.label}</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-300 text-base">—</span>
+                      )}
                     </td>
                   </tr>
                 );

@@ -68,6 +68,16 @@ export function Settings({ settings, onChange, onFetch, loading, loadingLabel }:
             onChange={(e) => set({ throughputWebhookUrl: e.target.value || undefined })}
           />
         </div>
+        <div>
+          <label className={labelCls}>Jira Base URL (для ссылок на задачи)</label>
+          <input
+            type="url"
+            className={inputCls}
+            value={settings.jiraBaseUrl || ''}
+            placeholder="https://jira.tochka.com/browse"
+            onChange={(e) => set({ jiraBaseUrl: e.target.value || undefined })}
+          />
+        </div>
       </div>
 
       {settings.mode === 'standard' ? (

@@ -21,23 +21,26 @@ import { PredictabilityWidget } from './components/PredictabilityWidget';
 import { AgingWIP } from './components/AgingWIP';
 import { IssuesTable } from './components/IssuesTable';
 import { RiceSection } from './components/RiceSection';
+import IssuesTab from './components/IssuesTab';
 
 import type { Issue, ThroughputWeek, Settings as SettingsType } from './types';
 
 const DEFAULT_SETTINGS: SettingsType = {
   webhookUrl: '',
+  jiraBaseUrl: 'https://jira.tochka.com/browse',
   mode: 'standard',
   projectKey: '',
   issueTypes: ['User Story', 'Задача', 'Ошибка', 'Техдолг'],
   customJql: '',
 };
 
-type AppTab     = 'metrics' | 'rice' | 'settings';
+type AppTab     = 'metrics' | 'rice' | 'issues' | 'settings';
 type StatusType = 'hidden' | 'info' | 'error' | 'success';
 
 const TABS: { id: AppTab; label: string }[] = [
   { id: 'metrics',  label: 'Метрики' },
   { id: 'rice',     label: 'Scoring' },
+  { id: 'issues',   label: 'Задачи' },
   { id: 'settings', label: 'Настройки' },
 ];
 
@@ -52,6 +55,7 @@ export default function App() {
   const [loadingLabel, setLoadingLabel] = useState('Загрузить данные');
   const [hasData, setHasData]           = useState(false);
   const [riceCount, setRiceCount]       = useState<number | null>(null);
+  const [jiraIssuesCount, setJiraIssuesCount] = useState<number | null>(null);
   const [tpWeeksRaw, setTpWeeksRaw]     = useState<ThroughputWeek[] | null>(null);
 
   const handleFetch = async () => {
@@ -143,6 +147,13 @@ export default function App() {
                     activeTab === id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
                   }`}>
                     {riceCount}
+                  </span>
+                )}
+                {id === 'issues' && jiraIssuesCount !== null && jiraIssuesCount > 0 && (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full leading-none flex items-center justify-center ${
+                    activeTab === id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {jiraIssuesCount}
                   </span>
                 )}
               </button>
@@ -263,6 +274,14 @@ export default function App() {
             onIssuesCountChange={setRiceCount}
           />
         </div>
+
+        {activeTab === 'issues' && (
+          <IssuesTab
+            webhookUrl={settings.webhookUrl}
+            jiraBaseUrl={settings.jiraBaseUrl ?? 'https://jira.tochka.com/browse'}
+            onCountChange={setJiraIssuesCount}
+          />
+        )}
 
       </div>
     </div>

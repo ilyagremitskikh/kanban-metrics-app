@@ -21,12 +21,16 @@ export interface RiceUpdate {
   confidence: number | null;
   effort: number | null;
   rice_score: number | null;
-  // Bug fields (Ошибка) — null для других типов
-  severity: string | null;
-  bug_priority: string | null;
-  bug_score: number | null;
-  // Tech Debt fields (Техдолг) — null для других типов
-  cost_of_delay: number | null;
+  // Bug fields (FinTech Defect Scoring) — null для других типов
+  bug_risk:       number | null;
+  bug_process:    number | null;
+  bug_scale:      number | null;
+  bug_workaround: number | null;
+  bug_score:      number | null;
+  // Tech Debt fields (Impact / Effort Matrix) — null для других типов
+  td_impact: number | null;
+  td_effort: number | null;
+  td_roi:    number | null;
 }
 
 export async function saveRiceScores(webhookUrl: string, updates: RiceUpdate[]): Promise<void> {

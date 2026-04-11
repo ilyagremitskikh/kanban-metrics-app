@@ -1,0 +1,252 @@
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, Pencil, Loader2, ClipboardList, RefreshCw, ChevronsUp, ChevronUp, Minus, ChevronDown, ChevronsDown, MinusCircle, Equal } from 'lucide-react';
+import { fetchJiraIssues } from '../lib/jiraApi';
+import type { JiraIssueShort } from '../types';
+import IssueSlideOver from './IssueSlideOver';
+import CreateIssueForm from './CreateIssueForm';
+import EditIssueForm from './EditIssueForm';
+import { TypeBadge, StatusBadge } from './Badges';
+
+interface Props {
+  webhookUrl: string;
+  jiraBaseUrl?: string;
+  onCountChange?: (count: number) => void;
+}
+
+type SlideOverMode = { mode: 'create' } | { mode: 'edit'; issueKey: string };
+
+// Priority display config — русские значения из Jira
+interface PriorityCfg { icon: React.ReactNode; cls: string }
+const PRIORITY_CFG: Record<string, PriorityCfg> = {
+  'Неотложный':    { icon: <MinusCircle size={12} />, cls: 'text-red-600 bg-red-50' },
+  'Срочный':       { icon: <ChevronsUp size={12} />,  cls: 'text-orange-600 bg-orange-50' },
+  'Высокий':       { icon: <ChevronUp size={12} />,   cls: 'text-orange-500 bg-orange-50' },
+  'Нормальный':    { icon: <ChevronDown size={12} />, cls: 'text-blue-500 bg-blue-50' },
+  'Средний':       { icon: <Equal size={12} />,       cls: 'text-yellow-600 bg-yellow-50' },
+  'Низкий':        { icon: <ChevronsDown size={12} />,cls: 'text-blue-400 bg-blue-50' },
+  'Незначительный':{ icon: <Minus size={12} />,       cls: 'text-gray-400 bg-gray-100' },
+  // English fallbacks
+  'Highest': { icon: <MinusCircle size={12} />, cls: 'text-red-600 bg-red-50' },
+  'High':    { icon: <ChevronUp size={12} />,   cls: 'text-orange-500 bg-orange-50' },
+  'Medium':  { icon: <Minus size={12} />,       cls: 'text-yellow-600 bg-yellow-50' },
+  'Low':     { icon: <ChevronDown size={12} />, cls: 'text-blue-500 bg-blue-50' },
+  'Lowest':  { icon: <ChevronsDown size={12} />,cls: 'text-gray-400 bg-gray-100' },
+};
+
+function PriorityBadge({ priority }: { priority: string }) {
+  const cfg = PRIORITY_CFG[priority] ?? PRIORITY_CFG.Medium;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap ${cfg.cls}`}>
+      {cfg.icon}
+      {priority}
+    </span>
+  );
+}
+
+export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.tochka.com/browse', onCountChange }: Props) {
+  const [issues, setIssues] = useState<JiraIssueShort[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [slideOver, setSlideOver] = useState<SlideOverMode | null>(null);
+
+  const load = useCallback(async () => {
+    if (!webhookUrl) {
+      setError('Укажите Webhook URL в настройках');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchJiraIssues(webhookUrl);
+      setIssues(data);
+      onCountChange?.(data.length);
+    } catch {
+      setError('Не удалось загрузить задачи. Проверьте подключение.');
+    } finally {
+      setLoading(false);
+    }
+  }, [webhookUrl, onCountChange]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleCreated = () => { load(); };
+  const handleUpdated = () => { load(); };
+
+  const slideOverTitle = slideOver?.mode === 'create'
+    ? 'Создать задачу'
+    : slideOver?.mode === 'edit'
+      ? `Редактировать: ${slideOver.issueKey}`
+      : '';
+
+  return (
+    <div className="flex flex-col gap-6 p-6 md:p-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-extrabold text-donezo-dark tracking-tight">Задачи</h2>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={load}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-4 py-2 bg-white text-gray-600 text-sm font-medium
+              border border-gray-200 rounded-full hover:bg-donezo-light hover:text-donezo-dark
+              transition-all duration-200 disabled:opacity-50"
+            title="Обновить"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button
+            onClick={() => setSlideOver({ mode: 'create' })}
+            className="flex items-center gap-2 px-5 py-2.5 bg-donezo-dark text-white text-sm font-semibold
+              rounded-full hover:bg-donezo-primary hover:-translate-y-0.5 transition-all duration-200 shadow-sm"
+          >
+            <Plus size={16} />
+            Создать задачу
+          </button>
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-2xl text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && issues.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-gray-400">
+          <Loader2 size={28} className="animate-spin text-donezo-primary" />
+          <span className="text-sm">Загружаем задачи...</span>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && !error && issues.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <div className="w-16 h-16 rounded-full bg-donezo-light flex items-center justify-center">
+            <ClipboardList size={28} className="text-donezo-dark" />
+          </div>
+          <div className="text-center">
+            <p className="font-semibold text-gray-700">Задач пока нет</p>
+            <p className="text-sm text-gray-400 mt-1">Создайте первую задачу или проверьте подключение</p>
+          </div>
+          <button
+            onClick={() => setSlideOver({ mode: 'create' })}
+            className="flex items-center gap-2 px-5 py-2.5 bg-donezo-dark text-white text-sm font-semibold
+              rounded-full hover:bg-donezo-primary hover:-translate-y-0.5 transition-all duration-200 shadow-sm"
+          >
+            <Plus size={16} />
+            Создать задачу
+          </button>
+        </div>
+      )}
+
+      {/* Table */}
+      {issues.length > 0 && (
+        <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-donezo">
+          <table className="w-full text-sm table-fixed">
+            <colgroup>
+              <col className="w-28" />
+              <col className="w-32" />
+              <col /> {/* Summary — занимает всё остальное */}
+              <col className="w-48" />
+              <col className="w-28" />
+              <col className="w-12" />
+            </colgroup>
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50/60">
+                <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-widest">
+                  Ключ
+                </th>
+                <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-widest">
+                  Тип
+                </th>
+                <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-widest">
+                  Заголовок
+                </th>
+                <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-widest">
+                  Статус
+                </th>
+                <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-widest">
+                  Приоритет
+                </th>
+                <th className="w-12" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {issues.map(issue => (
+                <tr
+                  key={issue.key}
+                  className="hover:bg-donezo-light/40 transition-colors duration-150 group"
+                >
+                  <td className="px-5 py-3.5">
+                    <a
+                      href={`${jiraBaseUrl}/${issue.key}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-xs font-bold text-donezo-primary hover:text-donezo-dark
+                        hover:underline underline-offset-2 transition-colors duration-150 whitespace-nowrap"
+                    >
+                      {issue.key}
+                    </a>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <TypeBadge type={issue.issuetype} />
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <span className="text-gray-800 text-sm line-clamp-2 break-words">
+                      {issue.summary}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <StatusBadge status={issue.status} />
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <PriorityBadge priority={issue.priority} />
+                  </td>
+                  <td className="px-3 py-3.5">
+                    <button
+                      onClick={() => setSlideOver({ mode: 'edit', issueKey: issue.key })}
+                      className="opacity-0 group-hover:opacity-100 flex items-center justify-center w-8 h-8
+                        rounded-full bg-white border border-gray-200 text-gray-400 hover:text-donezo-dark
+                        hover:border-donezo-light transition-all duration-200"
+                      title="Редактировать"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="px-5 py-3 border-t border-gray-50 text-xs text-gray-400">
+            {issues.length} {issues.length === 1 ? 'задача' : issues.length < 5 ? 'задачи' : 'задач'}
+          </div>
+        </div>
+      )}
+
+      {/* Slide-over */}
+      <IssueSlideOver
+        open={slideOver !== null}
+        onClose={() => setSlideOver(null)}
+        title={slideOverTitle}
+      >
+        {slideOver?.mode === 'create' && (
+          <CreateIssueForm
+            webhookUrl={webhookUrl}
+            onCreated={handleCreated}
+            onClose={() => setSlideOver(null)}
+          />
+        )}
+        {slideOver?.mode === 'edit' && (
+          <EditIssueForm
+            webhookUrl={webhookUrl}
+            issueKey={slideOver.issueKey}
+            onUpdated={handleUpdated}
+            onClose={() => setSlideOver(null)}
+          />
+        )}
+      </IssueSlideOver>
+    </div>
+  );
+}
