@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Pencil, Loader2, ClipboardList, RefreshCw, ChevronsUp, ChevronUp, Minus, ChevronDown, ChevronsDown, MinusCircle, Equal } from 'lucide-react';
 import { fetchJiraIssues } from '../lib/jiraApi';
 import type { JiraIssueShort } from '../types';
@@ -43,11 +43,48 @@ function PriorityBadge({ priority }: { priority: string }) {
   );
 }
 
+// --- T-001: Category bucket logic ---
+const CATEGORY_MAP: Record<string, string> = {
+  'User Story': 'User Story',
+  'Задача':     'Задача',
+  'Sub-task':   'Задача',
+  'Подзадача':  'Задача',
+  'Ошибка':     'Ошибки',
+  'Bug':        'Ошибки',
+  'Техдолг':    'Техдолг',
+  'Tech Debt':  'Техдолг',
+};
+
+const CATEGORY_ORDER = ['User Story', 'Задача', 'Ошибки', 'Техдолг', 'Прочее'] as const;
+
+// Category colors for section headers
+const CATEGORY_COLORS: Record<string, { bg: string; text: string; badge: string }> = {
+  'User Story': { bg: 'bg-emerald-50',  text: 'text-emerald-700', badge: 'bg-emerald-100 text-emerald-700' },
+  'Задача':     { bg: 'bg-gray-50',     text: 'text-gray-600',    badge: 'bg-gray-200 text-gray-600' },
+  'Ошибки':     { bg: 'bg-red-50',      text: 'text-red-700',     badge: 'bg-red-100 text-red-700' },
+  'Техдолг':    { bg: 'bg-amber-50',    text: 'text-amber-700',   badge: 'bg-amber-100 text-amber-700' },
+  'Прочее':     { bg: 'bg-gray-50',     text: 'text-gray-500',    badge: 'bg-gray-200 text-gray-500' },
+};
+
+function groupByCategory(issues: JiraIssueShort[]): { name: string; issues: JiraIssueShort[] }[] {
+  const buckets = new Map<string, JiraIssueShort[]>(
+    CATEGORY_ORDER.map(name => [name, []])
+  );
+  for (const issue of issues) {
+    const category = CATEGORY_MAP[issue.issuetype] ?? 'Прочее';
+    buckets.get(category)!.push(issue);
+  }
+  return CATEGORY_ORDER.map(name => ({ name, issues: buckets.get(name)! }));
+}
+// --- End T-001 ---
+
 export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.tochka.com/browse', onCountChange }: Props) {
   const [issues, setIssues] = useState<JiraIssueShort[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [slideOver, setSlideOver] = useState<SlideOverMode | null>(null);
+  // T-003: collapse state — empty set = all expanded
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     if (!webhookUrl) {
@@ -77,6 +114,23 @@ export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.toch
     : slideOver?.mode === 'edit'
       ? `Редактировать: ${slideOver.issueKey}`
       : '';
+
+  // T-001 + T-002: memoized grouped categories, filter empty
+  const groupedIssues = useMemo(() => groupByCategory(issues), [issues]);
+  const nonEmptyGroups = useMemo(
+    () => groupedIssues.filter(g => g.issues.length > 0),
+    [groupedIssues]
+  );
+
+  // T-003: toggle collapse
+  const toggleCategory = (name: string) => {
+    setCollapsedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
 
   return (
     <div className="flex flex-col gap-6 p-6 md:p-8">
@@ -141,7 +195,7 @@ export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.toch
         </div>
       )}
 
-      {/* Table */}
+      {/* T-002 + T-003: Grouped table */}
       {issues.length > 0 && (
         <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-donezo">
           <table className="w-full text-sm table-fixed">
@@ -173,52 +227,85 @@ export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.toch
                 <th className="w-12" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
-              {issues.map(issue => (
-                <tr
-                  key={issue.key}
-                  className="hover:bg-donezo-light/40 transition-colors duration-150 group"
-                >
-                  <td className="px-5 py-3.5">
-                    <a
-                      href={`${jiraBaseUrl}/${issue.key}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-mono text-xs font-bold text-donezo-primary hover:text-donezo-dark
-                        hover:underline underline-offset-2 transition-colors duration-150 whitespace-nowrap"
+            <tbody>
+              {nonEmptyGroups.map(group => {
+                const colors = CATEGORY_COLORS[group.name] ?? CATEGORY_COLORS['Прочее'];
+                const collapsed = collapsedCategories.has(group.name);
+                return (
+                  <>
+                    {/* T-002: Category section header */}
+                    <tr
+                      key={`header-${group.name}`}
+                      onClick={() => toggleCategory(group.name)}
+                      className={`cursor-pointer border-t border-gray-100 ${colors.bg} hover:brightness-95 transition-all duration-150`}
                     >
-                      {issue.key}
-                    </a>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <TypeBadge type={issue.issuetype} />
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span className="text-gray-800 text-sm line-clamp-2 break-words">
-                      {issue.summary}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <StatusBadge status={issue.status} />
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <PriorityBadge priority={issue.priority} />
-                  </td>
-                  <td className="px-3 py-3.5">
-                    <button
-                      onClick={() => setSlideOver({ mode: 'edit', issueKey: issue.key })}
-                      className="opacity-0 group-hover:opacity-100 flex items-center justify-center w-8 h-8
-                        rounded-full bg-white border border-gray-200 text-gray-400 hover:text-donezo-dark
-                        hover:border-donezo-light transition-all duration-200"
-                      title="Редактировать"
-                    >
-                      <Pencil size={13} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                      <td colSpan={6} className="px-5 py-2.5">
+                        <div className="flex items-center gap-2">
+                          {/* T-003: chevron indicator */}
+                          {collapsed
+                            ? <ChevronDown size={13} className={colors.text} />
+                            : <ChevronUp size={13} className={colors.text} />
+                          }
+                          <span className={`text-xs font-bold uppercase tracking-widest ${colors.text}`}>
+                            {group.name}
+                          </span>
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold ${colors.badge}`}>
+                            {group.issues.length}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* T-003: Issue rows — hidden when collapsed */}
+                    {!collapsed && group.issues.map(issue => (
+                      <tr
+                        key={issue.key}
+                        className="hover:bg-donezo-light/40 transition-colors duration-150 group border-t border-gray-50"
+                      >
+                        <td className="px-5 py-3.5">
+                          <a
+                            href={`${jiraBaseUrl}/${issue.key}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-xs font-bold text-donezo-primary hover:text-donezo-dark
+                              hover:underline underline-offset-2 transition-colors duration-150 whitespace-nowrap"
+                          >
+                            {issue.key}
+                          </a>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <TypeBadge type={issue.issuetype} />
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span className="text-gray-800 text-sm line-clamp-2 break-words">
+                            {issue.summary}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <StatusBadge status={issue.status} />
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <PriorityBadge priority={issue.priority} />
+                        </td>
+                        <td className="px-3 py-3.5">
+                          <button
+                            onClick={() => setSlideOver({ mode: 'edit', issueKey: issue.key })}
+                            className="opacity-0 group-hover:opacity-100 flex items-center justify-center w-8 h-8
+                              rounded-full bg-white border border-gray-200 text-gray-400 hover:text-donezo-dark
+                              hover:border-donezo-light transition-all duration-200"
+                            title="Редактировать"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </>
+                );
+              })}
             </tbody>
           </table>
+          {/* T-004: Footer with total count across all categories */}
           <div className="px-5 py-3 border-t border-gray-50 text-xs text-gray-400">
             {issues.length} {issues.length === 1 ? 'задача' : issues.length < 5 ? 'задачи' : 'задач'}
           </div>
