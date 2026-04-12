@@ -1,17 +1,11 @@
 import type { RiceIssue } from '../types';
-
-/** In dev mode, use relative paths so Vite proxy handles CORS. In prod, use full URL. */
-function riceUrl(webhookUrl: string, path: string, n8nBaseUrl?: string): string {
-  if (import.meta.env.DEV) return path;
-  const base = (n8nBaseUrl?.trim() || new URL(webhookUrl).origin).replace(/\/$/, '');
-  return `${base}${path}`;
-}
+import { getArrayField, requestN8nJson } from './apiClient';
+import { normalizeRiceIssue } from './apiNormalizers';
 
 export async function fetchRiceIssues(webhookUrl: string, n8nBaseUrl?: string): Promise<RiceIssue[]> {
-  const res = await fetch(riceUrl(webhookUrl, '/webhook/rice-scoring', n8nBaseUrl));
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  return (data.issues ?? []) as RiceIssue[];
+  const data = await requestN8nJson<unknown>(webhookUrl, '/webhook/rice-scoring', { n8nBaseUrl });
+  return getArrayField<unknown>(data, 'issues', 'Неожиданный формат ответа rice-scoring webhook')
+    .map((issue) => normalizeRiceIssue(issue as Parameters<typeof normalizeRiceIssue>[0]));
 }
 
 export interface RiceUpdate {
@@ -35,10 +29,9 @@ export interface RiceUpdate {
 }
 
 export async function saveRiceScores(webhookUrl: string, updates: RiceUpdate[], n8nBaseUrl?: string): Promise<void> {
-  const res = await fetch(riceUrl(webhookUrl, '/webhook/rice-score-update', n8nBaseUrl), {
+  await requestN8nJson<unknown>(webhookUrl, '/webhook/rice-score-update', {
+    n8nBaseUrl,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ updates }),
+    body: { updates },
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }

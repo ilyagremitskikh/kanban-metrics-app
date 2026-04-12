@@ -1,26 +1,14 @@
 import type { Issue, Settings, ThroughputIssueRaw } from '../types';
-
-/** In dev mode, strip origin so Vite proxy handles CORS. In prod, keep full URL. */
-function proxyUrl(fullUrl: string): string {
-  if (import.meta.env.DEV) {
-    const u = new URL(fullUrl);
-    return u.pathname + u.search;
-  }
-  return fullUrl;
-}
+import { getArrayField, requestWebhookJson } from './apiClient';
+import { normalizeIssue, normalizeThroughputIssue } from './apiNormalizers';
 
 async function callWebhook(url: string, body: object): Promise<Issue[]> {
-  const res = await fetch(proxyUrl(url), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-  const data = await res.json();
-  if (!data.issues || !Array.isArray(data.issues)) {
-    throw new Error('Неожиданный формат ответа от n8n. Ожидается { issues: [...] }');
-  }
-  return data.issues as Issue[];
+  const data = await requestWebhookJson<unknown>(url, 'POST', body);
+  return getArrayField<unknown>(
+    data,
+    'issues',
+    'Неожиданный формат ответа от n8n. Ожидается { issues: [...] }',
+  ).map((item) => normalizeIssue(item as Parameters<typeof normalizeIssue>[0]));
 }
 
 export async function fetchIssues(
@@ -37,7 +25,6 @@ export async function fetchIssues(
 
   return callWebhook(webhookUrl, {
     project: settings.projectKey,
-    issueTypes: settings.issueTypes,
   });
 }
 
@@ -48,10 +35,10 @@ export async function fetchThroughputRaw(
   const { throughputWebhookUrl } = settings;
   if (!throughputWebhookUrl) throw new Error('throughputWebhookUrl не задан');
   onProgress('Загружаем throughput данные…');
-  const res = await fetch(proxyUrl(throughputWebhookUrl));
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-  const data = await res.json();
-  if (!data.data || !Array.isArray(data.data))
-    throw new Error('Неожиданный формат ответа throughput webhook. Ожидается { data: [...] }');
-  return data.data as ThroughputIssueRaw[];
+  const data = await requestWebhookJson<unknown>(throughputWebhookUrl, 'GET');
+  return getArrayField<unknown>(
+    data,
+    'data',
+    'Неожиданный формат ответа throughput webhook. Ожидается { data: [...] }',
+  ).map((item) => normalizeThroughputIssue(item as Parameters<typeof normalizeThroughputIssue>[0]));
 }

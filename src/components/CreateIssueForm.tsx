@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Sparkles, Loader2, Send } from 'lucide-react';
 import { aiGenerate, createJiraIssue } from '../lib/jiraApi';
 import type { ChecklistItem } from '../types';
+import { normalizePriority } from '../lib/priorities';
 import AiSummaryInput from './AiSummaryInput';
 import AiDescriptionDiff from './AiDescriptionDiff';
-import { PrioritySelect, IssueTypeSelect, LabelsInput, ChecklistEditor, normalizePriority } from './IssueFormFields';
+import { PrioritySelect, IssueTypeSelect, LabelsInput, ChecklistEditor } from './IssueFormFields';
 
 interface Props {
   webhookUrl: string;

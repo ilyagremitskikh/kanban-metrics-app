@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import type { ChecklistItem } from '../types';
 import { aiChecklist } from '../lib/jiraApi';
+import { normalizePriority } from '../lib/priorities';
 
 // ── PrioritySelect (custom dropdown with icons) ───────────────────────────────
 
@@ -67,39 +68,6 @@ const PRIORITY_OPTIONS: PriorityOption[] = [
     dotCls: 'bg-gray-300',
   },
 ];
-
-// Normalize priority — handles Russian + English → Russian
-const PRIORITY_ALIASES: Record<string, string> = {
-  // English → Russian
-  highest: 'Неотложный',
-  high:    'Высокий',
-  medium:  'Нормальный',
-  low:     'Низкий',
-  lowest:  'Незначительный',
-  // Russian exact (for case-insensitive match fallback)
-  неотложный:    'Неотложный',
-  срочный:       'Срочный',
-  высокий:       'Высокий',
-  нормальный:    'Нормальный',
-  низкий:        'Низкий',
-  незначительный:'Незначительный',
-  // Legacy Jira Russian variants
-  средний: 'Средний',
-  критический: 'Неотложный',
-  blocker: 'Неотложный',
-  critical: 'Срочный',
-  major: 'Высокий',
-  minor: 'Низкий',
-  trivial: 'Незначительный',
-};
-
-function normalizePriority(value: string): string {
-  if (!value) return 'Нормальный';
-  const lower = value.toLowerCase();
-  return PRIORITY_ALIASES[lower]
-    ?? PRIORITY_OPTIONS.find(o => o.value.toLowerCase() === lower)?.value
-    ?? 'Нормальный';
-}
 
 interface PrioritySelectProps {
   value: string;
@@ -178,9 +146,6 @@ export function PrioritySelect({ value, onChange, disabled }: PrioritySelectProp
     </div>
   );
 }
-
-// Экспортируем нормализатор для использования в формах
-export { normalizePriority };
 
 // ── IssueTypeSelect ───────────────────────────────────────────────────────────
 

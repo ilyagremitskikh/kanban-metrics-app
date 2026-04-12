@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { Loader2, Save, Paperclip, MessageSquare } from 'lucide-react';
 import { fetchJiraIssueDetail, updateJiraIssue } from '../lib/jiraApi';
 import type { JiraIssueDetailed, ChecklistItem, UpdateIssueRequest } from '../types';
+import { normalizePriority } from '../lib/priorities';
 import AiSummaryInput from './AiSummaryInput';
 import AiDescriptionDiff from './AiDescriptionDiff';
-import { PrioritySelect, LabelsInput, ChecklistEditor, normalizePriority } from './IssueFormFields';
+import { PrioritySelect, LabelsInput, ChecklistEditor } from './IssueFormFields';
 
 interface Props {
   webhookUrl: string;

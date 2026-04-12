@@ -6,19 +6,13 @@ import type {
   AiGenerateResponse,
   OptimizeContext,
 } from '../types';
-
-/** In dev mode, use relative paths so Vite proxy handles CORS. In prod, use full URL. */
-function jiraUrl(webhookUrl: string, path: string, n8nBaseUrl?: string): string {
-  if (import.meta.env.DEV) return path;
-  const base = (n8nBaseUrl?.trim() || new URL(webhookUrl).origin).replace(/\/$/, '');
-  return `${base}${path}`;
-}
+import { getArrayField, requestN8nJson } from './apiClient';
+import { normalizeJiraIssue } from './apiNormalizers';
 
 export async function fetchJiraIssues(webhookUrl: string, n8nBaseUrl?: string): Promise<JiraIssueShort[]> {
-  const res = await fetch(jiraUrl(webhookUrl, '/webhook/jira/issues', n8nBaseUrl));
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  return (data.issues ?? []) as JiraIssueShort[];
+  const data = await requestN8nJson<unknown>(webhookUrl, '/webhook/jira/issues', { n8nBaseUrl });
+  return getArrayField<unknown>(data, 'issues', 'Неожиданный формат ответа Jira issues webhook')
+    .map((issue) => normalizeJiraIssue(issue as Parameters<typeof normalizeJiraIssue>[0]));
 }
 
 export async function fetchJiraIssueDetail(
@@ -26,10 +20,13 @@ export async function fetchJiraIssueDetail(
   key: string,
   n8nBaseUrl?: string,
 ): Promise<JiraIssueDetailed> {
-  const res = await fetch(jiraUrl(webhookUrl, `/webhook/jira/issues?key=${encodeURIComponent(key)}`, n8nBaseUrl));
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  const issues = (data.issues ?? []) as JiraIssueDetailed[];
+  const data = await requestN8nJson<unknown>(
+    webhookUrl,
+    `/webhook/jira/issues?key=${encodeURIComponent(key)}`,
+    { n8nBaseUrl },
+  );
+  const issues = getArrayField<unknown>(data, 'issues', 'Неожиданный формат ответа Jira issue detail webhook')
+    .map((issue) => normalizeJiraIssue(issue as Parameters<typeof normalizeJiraIssue>[0]) as JiraIssueDetailed);
   if (!issues[0]) throw new Error('Issue not found');
   return issues[0];
 }
@@ -39,13 +36,11 @@ export async function createJiraIssue(
   data: CreateIssueRequest,
   n8nBaseUrl?: string,
 ): Promise<{ status: string; key: string }> {
-  const res = await fetch(jiraUrl(webhookUrl, '/webhook/jira/issues', n8nBaseUrl), {
+  return requestN8nJson<{ status: string; key: string }>(webhookUrl, '/webhook/jira/issues', {
+    n8nBaseUrl,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: data,
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
 }
 
 export async function updateJiraIssue(
@@ -54,16 +49,15 @@ export async function updateJiraIssue(
   data: UpdateIssueRequest,
   n8nBaseUrl?: string,
 ): Promise<{ status: string; key: string; updates: Record<string, unknown> }> {
-  const res = await fetch(
-    jiraUrl(webhookUrl, `/webhook/jira/issues?key=${encodeURIComponent(key)}`, n8nBaseUrl),
+  return requestN8nJson<{ status: string; key: string; updates: Record<string, unknown> }>(
+    webhookUrl,
+    `/webhook/jira/issues?key=${encodeURIComponent(key)}`,
     {
+      n8nBaseUrl,
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: data,
     },
   );
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
 }
 
 export async function aiGenerate(
@@ -72,13 +66,11 @@ export async function aiGenerate(
   userPrompt: string,
   n8nBaseUrl?: string,
 ): Promise<AiGenerateResponse> {
-  const res = await fetch(jiraUrl(webhookUrl, '/webhook/ai-generate', n8nBaseUrl), {
+  return requestN8nJson<AiGenerateResponse>(webhookUrl, '/webhook/ai-generate', {
+    n8nBaseUrl,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ issue_type: issueType, user_prompt: userPrompt }),
+    body: { issue_type: issueType, user_prompt: userPrompt },
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
 }
 
 export async function aiOptimize(
@@ -88,13 +80,11 @@ export async function aiOptimize(
   context?: OptimizeContext,
   n8nBaseUrl?: string,
 ): Promise<{ optimized_text: string }> {
-  const res = await fetch(jiraUrl(webhookUrl, '/webhook/ai-optimize', n8nBaseUrl), {
+  return requestN8nJson<{ optimized_text: string }>(webhookUrl, '/webhook/ai-optimize', {
+    n8nBaseUrl,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ field_type: fieldType, text, ...context }),
+    body: { field_type: fieldType, text, ...context },
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
 }
 
 export interface AiChecklistContext {
@@ -108,12 +98,13 @@ export async function aiChecklist(
   context: AiChecklistContext,
   n8nBaseUrl?: string,
 ): Promise<import('../types').ChecklistItem[]> {
-  const res = await fetch(jiraUrl(webhookUrl, '/webhook/ai-checklist', n8nBaseUrl), {
+  const data = await requestN8nJson<unknown>(webhookUrl, '/webhook/ai-checklist', {
+    n8nBaseUrl,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(context),
+    body: context,
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  return (data.checklists ?? []) as import('../types').ChecklistItem[];
+  if (!data || typeof data !== 'object' || !Array.isArray((data as { checklists?: unknown[] }).checklists)) {
+    return [];
+  }
+  return (data as { checklists: import('../types').ChecklistItem[] }).checklists;
 }

@@ -22,7 +22,6 @@ import { AgingWIP } from './components/AgingWIP';
 import { IssuesTable } from './components/IssuesTable';
 import { RiceSection } from './components/RiceSection';
 import IssuesTab from './components/IssuesTab';
-import { getUniqueTypes } from './lib/issueTypes';
 
 import type { Issue, ThroughputWeek, Settings as SettingsType } from './types';
 
@@ -32,7 +31,6 @@ const DEFAULT_SETTINGS: SettingsType = {
   jiraBaseUrl: 'https://jira.tochka.com/browse',
   mode: 'standard',
   projectKey: '',
-  issueTypes: ['User Story', 'Задача', 'Ошибка', 'Техдолг'],
   customJql: '',
 };
 
@@ -63,7 +61,6 @@ export default function App() {
   const handleFetch = async () => {
     if (!settings.webhookUrl) { setStatus({ msg: 'Укажите n8n Webhook URL', type: 'error' }); return; }
     if (settings.mode === 'standard' && !settings.projectKey) { setStatus({ msg: 'Укажите ключ проекта Jira', type: 'error' }); return; }
-    if (settings.mode === 'standard' && !settings.issueTypes.length) { setStatus({ msg: 'Выберите хотя бы один тип задач', type: 'error' }); return; }
     if (settings.mode === 'custom' && !settings.customJql.trim()) { setStatus({ msg: 'Введите JQL-запрос', type: 'error' }); return; }
 
     setLoading(true);
@@ -99,7 +96,6 @@ export default function App() {
   };
 
   const tableRows      = hasData ? buildTableRows(issues) : [];
-  const availableTypes = Array.from(new Set([...settings.issueTypes, ...getUniqueTypes(issues)])).sort((a, b) => a.localeCompare(b, 'ru'));
   const ltValues       = tableRows.filter((r) => r.leadTime      !== null).map((r) => r.leadTime      as number);
   const ctValues       = tableRows.filter((r) => r.devCycleTime  !== null).map((r) => r.devCycleTime  as number);
   const upstreamValues = tableRows.filter((r) => r.upstreamTime  !== null).map((r) => r.upstreamTime  as number);
@@ -175,7 +171,6 @@ export default function App() {
         {activeTab === 'settings' && (
           <SettingsPanel
             settings={settings}
-            availableTypes={availableTypes}
             onChange={setSettings}
             onFetch={handleFetch}
             loading={loading}

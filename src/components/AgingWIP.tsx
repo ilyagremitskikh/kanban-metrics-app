@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { percentile, fmtNum } from '../lib/utils';
 import { BUCKETS } from '../lib/metrics';
@@ -37,7 +37,6 @@ export function AgingWIP({ issues, jiraBaseUrl, bucket, thresholdValues }: Props
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<Chart | null>(null);
   const [showTable, setShowTable] = useState(false);
-  const [aged, setAged]           = useState<AgedIssue[]>([]);
 
   const activeBucketStatuses = bucket === 'upstream'
     ? BUCKETS.UPSTREAM_ACTIVE
@@ -46,11 +45,11 @@ export function AgingWIP({ issues, jiraBaseUrl, bucket, thresholdValues }: Props
   const p50 = percentile(thresholdValues, 50);
   const p85 = percentile(thresholdValues, 85);
 
-  useEffect(() => {
+  const aged = useMemo<AgedIssue[]>(() => {
     const now = new Date();
     const wipIssues = issues.filter((i) => activeBucketStatuses.includes(i.currentStatus));
 
-    const computed = wipIssues
+    return wipIssues
       .map((i) => {
         const sorted = [...i.transitions].sort(
           (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
@@ -70,9 +69,7 @@ export function AgingWIP({ issues, jiraBaseUrl, bucket, thresholdValues }: Props
       })
       .sort((a, b) => b.age - a.age)
       .slice(0, 40);
-
-    setAged(computed);
-  }, [issues, bucket]);
+  }, [issues, activeBucketStatuses]);
 
   useEffect(() => {
     if (!canvasRef.current || !aged.length) return;
@@ -154,7 +151,7 @@ export function AgingWIP({ issues, jiraBaseUrl, bucket, thresholdValues }: Props
         },
       },
     });
-  }, [aged, p50, p85]);
+  }, [aged, p50, p85, bucket]);
 
   useEffect(() => () => { chartRef.current?.destroy(); }, []);
 

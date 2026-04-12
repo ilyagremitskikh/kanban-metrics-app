@@ -57,7 +57,6 @@ export interface Settings {
   jiraBaseUrl?: string;
   mode: JQLMode;
   projectKey: string;
-  issueTypes: string[];
   customJql: string;
 }
 
@@ -105,6 +104,7 @@ export interface JiraIssueShort {
   status: string;
   priority: string;
   issuetype: string;
+  score?: number | null;
   rice_score?: number | null;
   bug_score?: number | null;
   td_roi?: number | null;

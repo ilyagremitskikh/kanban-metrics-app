@@ -2,7 +2,6 @@ import type { Settings as SettingsType, JQLMode } from '../types';
 
 interface Props {
   settings: SettingsType;
-  availableTypes?: string[];
   onChange: (s: SettingsType) => void;
   onFetch: () => void;
   loading: boolean;
@@ -12,18 +11,9 @@ interface Props {
 const inputCls = 'w-full px-3 py-2 border border-gray-100 rounded-xl text-sm font-semibold outline-none transition-all duration-200 focus:bg-white focus:border-donezo-primary focus:ring-2 focus:ring-donezo-light bg-gray-50';
 const labelCls = 'block text-xs font-bold text-gray-500 mb-1.5';
 
-export function Settings({ settings, availableTypes = [], onChange, onFetch, loading, loadingLabel }: Props) {
+export function Settings({ settings, onChange, onFetch, loading, loadingLabel }: Props) {
   const set = (patch: Partial<SettingsType>) => onChange({ ...settings, ...patch });
   const toggleMode = (mode: JQLMode) => set({ mode });
-
-  const checkboxTypes = availableTypes.length > 0 ? availableTypes : settings.issueTypes;
-
-  const toggleType = (t: string) => {
-    const types = settings.issueTypes.includes(t)
-      ? settings.issueTypes.filter((x) => x !== t)
-      : [...settings.issueTypes, t];
-    set({ issueTypes: types });
-  };
 
   return (
     <div className="bg-white rounded-3xl p-6 mb-6 shadow-donezo border border-gray-100">
@@ -102,7 +92,7 @@ export function Settings({ settings, availableTypes = [], onChange, onFetch, loa
         </div>
 
         {settings.mode === 'standard' ? (
-          <div className="grid grid-cols-1 md:grid-cols-[120px_1fr_auto] gap-3 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-[120px_auto] gap-3 items-end">
             <div>
               <label className={labelCls}>Проект</label>
               <input
@@ -112,29 +102,6 @@ export function Settings({ settings, availableTypes = [], onChange, onFetch, loa
                 placeholder="PROJ"
                 onChange={(e) => set({ projectKey: e.target.value })}
               />
-            </div>
-            <div>
-              <label className={labelCls}>Типы задач</label>
-              <div className="flex gap-1.5 flex-wrap pt-0.5">
-                {checkboxTypes.map((t) => (
-                  <label
-                    key={t}
-                    className={`flex items-center gap-1.5 text-xs font-bold cursor-pointer px-3 py-1.5 rounded-full transition-all duration-200 border select-none hover:-translate-y-0.5 ${
-                      settings.issueTypes.includes(t)
-                        ? 'bg-donezo-dark text-white border-donezo-dark shadow-md'
-                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-donezo-primary hover:text-donezo-primary hover:bg-donezo-light'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="hidden"
-                      checked={settings.issueTypes.includes(t)}
-                      onChange={() => toggleType(t)}
-                    />
-                    {t}
-                  </label>
-                ))}
-              </div>
             </div>
             <div>
               <button
@@ -154,7 +121,7 @@ export function Settings({ settings, availableTypes = [], onChange, onFetch, loa
                 rows={2}
                 className={`${inputCls} resize-y leading-relaxed`}
                 value={settings.customJql}
-                placeholder='project = CREDITS AND issuetype in ("User Story", Задача) ORDER BY created ASC'
+                placeholder='project = CREDITS ORDER BY created ASC'
                 onChange={(e) => set({ customJql: e.target.value })}
               />
             </div>

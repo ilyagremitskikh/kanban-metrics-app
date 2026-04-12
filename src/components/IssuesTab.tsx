@@ -7,6 +7,7 @@ import CreateIssueForm from './CreateIssueForm';
 import EditIssueForm from './EditIssueForm';
 import { TypeBadge, StatusBadge } from './Badges';
 import { getUniqueTypes } from '../lib/issueTypes';
+import { normalizePriority } from '../lib/priorities';
 
 interface Props {
   webhookUrl: string;
@@ -27,16 +28,10 @@ const PRIORITY_CFG: Record<string, PriorityCfg> = {
   'Средний':       { icon: <Equal size={12} />,       cls: 'text-yellow-600 bg-yellow-50' },
   'Низкий':        { icon: <ChevronsDown size={12} />,cls: 'text-blue-400 bg-blue-50' },
   'Незначительный':{ icon: <Minus size={12} />,       cls: 'text-gray-400 bg-gray-100' },
-  // English fallbacks
-  'Highest': { icon: <MinusCircle size={12} />, cls: 'text-red-600 bg-red-50' },
-  'High':    { icon: <ChevronUp size={12} />,   cls: 'text-orange-500 bg-orange-50' },
-  'Medium':  { icon: <Minus size={12} />,       cls: 'text-yellow-600 bg-yellow-50' },
-  'Low':     { icon: <ChevronDown size={12} />, cls: 'text-blue-500 bg-blue-50' },
-  'Lowest':  { icon: <ChevronsDown size={12} />,cls: 'text-gray-400 bg-gray-100' },
 };
 
 function PriorityBadge({ priority }: { priority: string }) {
-  const cfg = PRIORITY_CFG[priority] ?? PRIORITY_CFG.Medium;
+  const cfg = PRIORITY_CFG[normalizePriority(priority)] ?? PRIORITY_CFG['Нормальный'];
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap ${cfg.cls}`}>
       {cfg.icon}
@@ -93,6 +88,7 @@ export default function IssuesTab({ webhookUrl, n8nBaseUrl, jiraBaseUrl = 'https
     if (issue.rice_score != null) return { value: issue.rice_score, type: 'rice' };
     if (issue.bug_score != null) return { value: issue.bug_score, type: 'bug' };
     if (issue.td_roi != null) return { value: issue.td_roi, type: 'techdebt' };
+    if (issue.score != null) return { value: issue.score, type: 'rice' };
     return null;
   };
 

@@ -31,27 +31,18 @@ const inputCls = 'px-4 py-2 border border-gray-100 bg-gray-50 rounded-xl text-sm
 const btnPrimary = 'px-6 py-2.5 bg-donezo-dark text-white rounded-full text-sm font-bold cursor-pointer border-none transition-all duration-200 hover:bg-donezo-primary hover:-translate-y-0.5 hover:shadow-lg whitespace-nowrap';
 
 export function MonteCarlo({ issues, queuePreset }: Props) {
-  const [mode, setMode]             = useState<MCMode>('items');
+  const presetQueue = queuePreset && queuePreset.length > 0 ? queuePreset : null;
+  const [mode, setMode]             = useState<MCMode>(presetQueue ? 'queue' : 'items');
   const [itemCount, setItemCount]   = useState(10);
   const [targetDate, setTargetDate] = useState('');
   const [result, setResult]         = useState<MCResult | null>(null);
   const [queueResult, setQueueResult] = useState<QueueItemResult[] | null>(null);
   const [wipCount, setWipCount]     = useState(() => getWipNow(issues));
-  const [queueItems, setQueueItems] = useState<string[]>(['', '', '']);
+  const [queueItems, setQueueItems] = useState<string[]>(() => presetQueue ?? ['', '', '']);
   const [error, setError]           = useState('');
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<Chart | null>(null);
-
-  useEffect(() => {
-    if (queuePreset && queuePreset.length > 0) {
-      setQueueItems(queuePreset);
-      setWipCount(getWipNow(issues));
-      setMode('queue');
-      setQueueResult(null);
-      setError('');
-    }
-  }, [queuePreset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const switchMode = (m: MCMode) => {
     setMode(m);

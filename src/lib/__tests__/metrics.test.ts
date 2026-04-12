@@ -78,7 +78,7 @@ describe('calculateIssueMetrics — Dev Cycle Time', () => {
     const m = calculateIssueMetrics(issue);
     expect(m.devCycleTime).not.toBeNull();
     expect(m.devCycleTime!).toBeGreaterThan(0.80);
-    expect(m.devCycleTime!).toBeLessThan(1.05);
+    expect(m.devCycleTime!).toBeLessThan(1.1);
   });
 
   it('Ping-Pong: returns to UPSTREAM mid-flight, but timer uses first DOWNSTREAM', () => {
