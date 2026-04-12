@@ -6,8 +6,7 @@ import type { OptimizeContext } from '../types';
 interface Props {
   value: string;
   onChange: (v: string) => void;
-  webhookUrl: string;
-  n8nBaseUrl?: string;
+  n8nBaseUrl: string;
   context?: OptimizeContext;
   label?: string;
   placeholder?: string;
@@ -16,7 +15,6 @@ interface Props {
 export default function AiSummaryInput({
   value,
   onChange,
-  webhookUrl,
   n8nBaseUrl,
   context,
   label = 'Заголовок (Summary)',
@@ -33,7 +31,7 @@ export default function AiSummaryInput({
     setError(null);
     prevValue.current = value;
     try {
-      const { optimized_text } = await aiOptimize(webhookUrl, 'summary', value, context, n8nBaseUrl);
+      const { optimized_text } = await aiOptimize(n8nBaseUrl, 'summary', value, context);
       onChange(optimized_text);
       setHighlighted(true);
       setTimeout(() => setHighlighted(false), 2000);

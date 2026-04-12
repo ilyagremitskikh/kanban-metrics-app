@@ -50,11 +50,10 @@ export interface SortState {
   dir: SortDir;
 }
 
+export const JIRA_BASE_URL = 'https://jira.tochka.com/browse';
+
 export interface Settings {
-  webhookUrl: string;
-  throughputWebhookUrl?: string;
-  n8nBaseUrl?: string;
-  jiraBaseUrl?: string;
+  n8nBaseUrl: string;
   mode: JQLMode;
   projectKey: string;
   customJql: string;

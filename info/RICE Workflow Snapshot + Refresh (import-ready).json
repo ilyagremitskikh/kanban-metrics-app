@@ -1,0 +1,866 @@
+{
+  "name": "RICE Workflow Snapshot + Refresh",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "rice-scoring",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "rice0001-0000-4000-8000-000000000001",
+      "name": "Webhook: Snapshot",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        16,
+        16
+      ],
+      "webhookId": "80c2aab0-0e9b-4db0-b6a0-ad54fbeb54c1"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "NxRK1sUDXpvbXZIz",
+          "mode": "list",
+          "cachedResultName": "RICE Scoring",
+          "cachedResultUrl": "/projects/eyKpLZzVcNRqbewu/datatables/NxRK1sUDXpvbXZIz"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true,
+        "orderBy": true,
+        "orderByColumn": "key"
+      },
+      "id": "rice0002-0000-4000-8000-000000000002",
+      "name": "DataTable: Get Snapshot",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        256,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const issues = $input.all().map(({ json }) => json);\nreturn [{ json: { issues, meta: { fetchedAt: new Date().toISOString(), cached: true, source: 'datatable' } } }];"
+      },
+      "id": "rice0003-0000-4000-8000-000000000003",
+      "name": "Code: Format Snapshot Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "rice0004-0000-4000-8000-000000000004",
+      "name": "Respond: Snapshot",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        672,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rice-scoring-refresh",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "rice0005-0000-4000-8000-000000000005",
+      "name": "Webhook: Refresh",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        16,
+        240
+      ],
+      "webhookId": "rice-scoring-refresh-webhook"
+    },
+    {
+      "parameters": {
+        "jiraVersion": "serverPat",
+        "operation": "getAll",
+        "returnAll": true,
+        "options": {
+          "fields": "labels, description,status,priority,issuelinks,issuetype,summary",
+          "jql": "project = CREDITS AND issuetype in (\"User Story\", Задача, Ошибка, Техдолг, \"BUSINESS SUB-TASK\", Подзадача) AND status in (Бэклог, Анализ, \"Готово к анализу\", \"Готово к разработке\", \"Готово к проработке\") AND labels = Партнерские_Интеграции"
+        }
+      },
+      "id": "rice0006-0000-4000-8000-000000000006",
+      "name": "Jira: Refresh Source Issues",
+      "type": "n8n-nodes-base.jira",
+      "typeVersion": 1,
+      "position": [
+        256,
+        240
+      ],
+      "credentials": {
+        "jiraSoftwareServerPatApi": {
+          "id": "5SFlqPVwtO2oNk7Z",
+          "name": "Jira Server"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "NxRK1sUDXpvbXZIz",
+          "mode": "list",
+          "cachedResultName": "RICE Scoring",
+          "cachedResultUrl": "/projects/eyKpLZzVcNRqbewu/datatables/NxRK1sUDXpvbXZIz"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "key",
+              "keyValue": "={{ $json.key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "summary": "={{ $json.fields.summary }}",
+            "key": "={{ $json.key }}",
+            "labels": "={{ $json.fields.labels.join(', ') }}",
+            "priority": "={{ $json.fields.priority.name }}",
+            "status": "={{ $json.fields.status.name }}",
+            "issue_type": "={{ $json.fields.issuetype.name }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "summary",
+              "displayName": "summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "key",
+              "displayName": "key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "issue_type",
+              "displayName": "issue_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "labels",
+              "displayName": "labels",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "reach",
+              "displayName": "reach",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "impact",
+              "displayName": "impact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "rice_score",
+              "displayName": "rice_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "effort",
+              "displayName": "effort",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "severity",
+              "displayName": "severity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "bug_priority",
+              "displayName": "bug_priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "bug_score",
+              "displayName": "bug_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "cost_of_delay",
+              "displayName": "cost_of_delay",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "rice0007-0000-4000-8000-000000000007",
+      "name": "DataTable: Upsert Snapshot",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        464,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "NxRK1sUDXpvbXZIz",
+          "mode": "list",
+          "cachedResultName": "RICE Scoring",
+          "cachedResultUrl": "/projects/eyKpLZzVcNRqbewu/datatables/NxRK1sUDXpvbXZIz"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true,
+        "orderBy": true,
+        "orderByColumn": "key"
+      },
+      "id": "rice0008-0000-4000-8000-000000000008",
+      "name": "DataTable: Get Refreshed Snapshot",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const issues = $input.all().map(({ json }) => json);\nconst now = new Date().toISOString();\nreturn [{ json: { issues, meta: { fetchedAt: now, syncedAt: now, cached: false, source: 'jira-sync' } } }];"
+      },
+      "id": "rice0009-0000-4000-8000-000000000009",
+      "name": "Code: Format Refresh Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "rice0010-0000-4000-8000-000000000010",
+      "name": "Respond: Refresh",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1088,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rice-score-update",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "393f1ce8-6c22-4f43-bd08-57518900d4b2",
+      "name": "Webhook1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        16,
+        240
+      ],
+      "webhookId": "bb47a116-eede-4050-96a9-394237f6038e"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ef870712-9005-4ef3-86f2-e347bd4d83a6",
+              "name": "updates",
+              "value": "={{ $json.body.updates }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5b16bb0e-e427-4100-9976-b3c6be7f2da3",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "updates",
+        "options": {}
+      },
+      "id": "ccc36c55-ed68-47ee-b3bf-37022848e1f0",
+      "name": "Split Out",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        432,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "NxRK1sUDXpvbXZIz",
+          "mode": "list",
+          "cachedResultName": "RICE Scoring",
+          "cachedResultUrl": "/projects/eyKpLZzVcNRqbewu/datatables/NxRK1sUDXpvbXZIz"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "key",
+              "keyValue": "={{ $json.key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reach": "={{ $json.reach }}",
+            "impact": "={{ $json.impact }}",
+            "confidence": "={{ $json.confidence }}",
+            "rice_score": "={{ $json.rice_score }}",
+            "effort": "={{ $json.effort }}",
+            "bug_score": "={{ $json.bug_score }}",
+            "td_impact": "={{ $json.td_impact }}",
+            "td_effort": "={{ $json.td_effort }}",
+            "td_roi": "={{ $json.td_roi }}",
+            "bug_workaround": "={{ $json.bug_workaround }}",
+            "bug_risk": "={{ $json.bug_risk }}",
+            "bug_process": "={{ $json.bug_process }}",
+            "bug_scale": "={{ $json.bug_scale }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "summary",
+              "displayName": "summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "key",
+              "displayName": "key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "issue_type",
+              "displayName": "issue_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "labels",
+              "displayName": "labels",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "reach",
+              "displayName": "reach",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "impact",
+              "displayName": "impact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "rice_score",
+              "displayName": "rice_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "effort",
+              "displayName": "effort",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "bug_score",
+              "displayName": "bug_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "bug_risk",
+              "displayName": "bug_risk",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "bug_process",
+              "displayName": "bug_process",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "bug_scale",
+              "displayName": "bug_scale",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "bug_workaround",
+              "displayName": "bug_workaround",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "td_impact",
+              "displayName": "td_impact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "td_effort",
+              "displayName": "td_effort",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "td_roi",
+              "displayName": "td_roi",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "c7daf61b-0fae-4d37-807f-4509ad3616ee",
+      "name": "Update row(s)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        640,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "status",
+                "value": "Issues Successfully updated!"
+              }
+            ]
+          },
+          "responseKey": "updated_issues"
+        }
+      },
+      "id": "df5a08fd-b5de-45e5-9bbf-cc8dbb2741ff",
+      "name": "Respond to Webhook1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        848,
+        240
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook: Snapshot": {
+      "main": [
+        [
+          {
+            "node": "DataTable: Get Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DataTable: Get Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Code: Format Snapshot Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Format Snapshot Response": {
+      "main": [
+        [
+          {
+            "node": "Respond: Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook: Refresh": {
+      "main": [
+        [
+          {
+            "node": "Jira: Refresh Source Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira: Refresh Source Issues": {
+      "main": [
+        [
+          {
+            "node": "DataTable: Upsert Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DataTable: Upsert Snapshot": {
+      "main": [
+        [
+          {
+            "node": "DataTable: Get Refreshed Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DataTable: Get Refreshed Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Code: Format Refresh Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Format Refresh Response": {
+      "main": [
+        [
+          {
+            "node": "Respond: Refresh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Update row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update row(s)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "meta": {
+    "aiBuilderAssisted": true,
+    "instanceId": "166a83f3b5979b833d91a82f993d0ab73b3eaf47ab8ca6dca2eb8a3d37458905"
+  },
+  "tags": []
+}

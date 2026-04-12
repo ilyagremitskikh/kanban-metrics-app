@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { fmtNum } from '../lib/utils';
 import type { TableRow, SortState, SortCol } from '../types';
+import { JIRA_BASE_URL } from '../types';
 import { TypeBadge, StatusBadge } from './Badges';
 
 interface Props {
   rows: TableRow[];
-  jiraBaseUrl: string;
 }
 
-export function IssuesTable({ rows, jiraBaseUrl }: Props) {
+export function IssuesTable({ rows }: Props) {
   const [sort, setSort] = useState<SortState>({ col: 'leadTime', dir: 'desc' });
 
   const handleSort = (col: SortCol) => {
@@ -69,7 +69,7 @@ export function IssuesTable({ rows, jiraBaseUrl }: Props) {
               <tr key={row.key} className="border-b border-gray-50 last:border-none hover:bg-donezo-light/30 transition-colors duration-200 group">
                 <td className="px-3 py-3.5 align-middle whitespace-nowrap">
                   <a
-                    href={`${jiraBaseUrl}/${row.key}`}
+                    href={`${JIRA_BASE_URL}/${row.key}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-mono text-sm font-bold text-donezo-dark hover:text-donezo-primary hover:underline transition-colors"

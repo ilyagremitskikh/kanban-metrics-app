@@ -1,12 +1,17 @@
 import type { Issue, Settings, ThroughputIssueRaw } from '../types';
-import { getArrayField, requestN8nJson, WEBHOOK_PATHS } from './apiClient';
+import { getArrayField, getOptionalMeta, requestN8nJson, WEBHOOK_PATHS, type WebhookMeta } from './apiClient';
 import { normalizeIssue, normalizeThroughputIssue } from './apiNormalizers';
 import { buildMetricsRequestBody } from './metricsQuery';
+
+export interface MetricsIssuesResponse {
+  issues: Issue[];
+  meta: WebhookMeta | null;
+}
 
 export async function fetchIssues(
   settings: Settings,
   onProgress: (msg: string) => void,
-): Promise<Issue[]> {
+): Promise<MetricsIssuesResponse> {
   const { n8nBaseUrl } = settings;
 
   onProgress('Запрашиваем данные из Jira через n8n…');
@@ -14,11 +19,14 @@ export async function fetchIssues(
     method: 'POST',
     body: buildMetricsRequestBody(settings),
   });
-  return getArrayField<unknown>(
-    data,
-    'issues',
-    'Неожиданный формат ответа от n8n. Ожидается { issues: [...] }',
-  ).map((item) => normalizeIssue(item as Parameters<typeof normalizeIssue>[0]));
+  return {
+    issues: getArrayField<unknown>(
+      data,
+      'issues',
+      'Неожиданный формат ответа от n8n. Ожидается { issues: [...] }',
+    ).map((item) => normalizeIssue(item as Parameters<typeof normalizeIssue>[0])),
+    meta: getOptionalMeta(data),
+  };
 }
 
 export async function fetchThroughputRaw(

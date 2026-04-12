@@ -8,8 +8,7 @@ import AiDescriptionDiff from './AiDescriptionDiff';
 import { PrioritySelect, LabelsInput, ChecklistEditor } from './IssueFormFields';
 
 interface Props {
-  webhookUrl: string;
-  n8nBaseUrl?: string;
+  n8nBaseUrl: string;
   availableTypes: string[];
   issueKey: string;
   onUpdated: () => void;
@@ -22,7 +21,7 @@ function formatDate(iso: string) {
   });
 }
 
-export default function EditIssueForm({ webhookUrl, n8nBaseUrl, availableTypes, issueKey, onUpdated, onClose }: Props) {
+export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, onUpdated, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const initial = useRef<JiraIssueDetailed | null>(null);
@@ -47,7 +46,7 @@ export default function EditIssueForm({ webhookUrl, n8nBaseUrl, availableTypes, 
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    fetchJiraIssueDetail(webhookUrl, issueKey, n8nBaseUrl)
+    fetchJiraIssueDetail(n8nBaseUrl, issueKey)
       .then(issue => {
         if (cancelled) return;
         initial.current = issue;
@@ -66,7 +65,7 @@ export default function EditIssueForm({ webhookUrl, n8nBaseUrl, availableTypes, 
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [webhookUrl, issueKey, n8nBaseUrl]);
+  }, [n8nBaseUrl, issueKey]);
 
   // Dirty tracking
   const getDirtyFields = (): UpdateIssueRequest => {
@@ -93,7 +92,7 @@ export default function EditIssueForm({ webhookUrl, n8nBaseUrl, availableTypes, 
     setSubmitError(null);
     setSubmitSuccess(false);
     try {
-      await updateJiraIssue(webhookUrl, issueKey, updates, n8nBaseUrl);
+      await updateJiraIssue(n8nBaseUrl, issueKey, updates);
       // Update initial ref so dirty tracking resets
       if (initial.current) {
         initial.current = {
@@ -159,7 +158,6 @@ export default function EditIssueForm({ webhookUrl, n8nBaseUrl, availableTypes, 
         <AiSummaryInput
           value={summary}
           onChange={setSummary}
-          webhookUrl={webhookUrl}
           n8nBaseUrl={n8nBaseUrl}
           context={{ issue_type: fallbackIssueType, summary, description, comments: comments.length ? comments : undefined }}
         />
@@ -167,7 +165,6 @@ export default function EditIssueForm({ webhookUrl, n8nBaseUrl, availableTypes, 
         <AiDescriptionDiff
           value={description}
           onChange={setDescription}
-          webhookUrl={webhookUrl}
           n8nBaseUrl={n8nBaseUrl}
           context={{ issue_type: fallbackIssueType, summary, description, comments: comments.length ? comments : undefined }}
         />
@@ -177,7 +174,6 @@ export default function EditIssueForm({ webhookUrl, n8nBaseUrl, availableTypes, 
         <ChecklistEditor
           value={checklists}
           onChange={setChecklists}
-          webhookUrl={webhookUrl}
           n8nBaseUrl={n8nBaseUrl}
           context={{
             issue_type: fallbackIssueType,

@@ -3,6 +3,7 @@ export const WEBHOOK_PATHS = {
   jiraIssues: '/webhook/jira/issues',
   throughput: '/webhook/throughput',
   riceScoring: '/webhook/rice-scoring',
+  riceScoringRefresh: '/webhook/rice-scoring-refresh',
   riceScoreUpdate: '/webhook/rice-score-update',
   aiGenerate: '/webhook/ai-generate',
   aiOptimize: '/webhook/ai-optimize',
@@ -16,6 +17,14 @@ interface N8nRequestOptions {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+export interface WebhookMeta {
+  fetchedAt?: string;
+  cached?: boolean;
+  source?: string;
+  syncedAt?: string;
+  [key: string]: unknown;
 }
 
 function buildUrl(n8nBaseUrl: string, path: string): string {
@@ -50,4 +59,10 @@ export async function requestN8nJson<T>(
 export function getArrayField<T>(data: unknown, key: string, errorMessage: string): T[] {
   if (!isRecord(data) || !Array.isArray(data[key])) throw new Error(errorMessage);
   return data[key] as T[];
+}
+
+export function getOptionalMeta(data: unknown): WebhookMeta | null {
+  if (!isRecord(data)) return null;
+  const meta = data.meta;
+  return isRecord(meta) ? (meta as WebhookMeta) : null;
 }

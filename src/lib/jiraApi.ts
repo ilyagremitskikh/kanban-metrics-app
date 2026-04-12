@@ -6,24 +6,30 @@ import type {
   AiGenerateResponse,
   OptimizeContext,
 } from '../types';
-import { getArrayField, requestN8nJson } from './apiClient';
+import { getArrayField, getOptionalMeta, requestN8nJson, WEBHOOK_PATHS, type WebhookMeta } from './apiClient';
 import { normalizeJiraIssue } from './apiNormalizers';
 
-export async function fetchJiraIssues(webhookUrl: string, n8nBaseUrl?: string): Promise<JiraIssueShort[]> {
-  const data = await requestN8nJson<unknown>(webhookUrl, '/webhook/jira/issues', { n8nBaseUrl });
-  return getArrayField<unknown>(data, 'issues', 'Неожиданный формат ответа Jira issues webhook')
-    .map((issue) => normalizeJiraIssue(issue as Parameters<typeof normalizeJiraIssue>[0]));
+export interface JiraIssuesResponse {
+  issues: JiraIssueShort[];
+  meta: WebhookMeta | null;
+}
+
+export async function fetchJiraIssues(n8nBaseUrl: string): Promise<JiraIssuesResponse> {
+  const data = await requestN8nJson<unknown>(n8nBaseUrl, WEBHOOK_PATHS.jiraIssues);
+  return {
+    issues: getArrayField<unknown>(data, 'issues', 'Неожиданный формат ответа Jira issues webhook')
+      .map((issue) => normalizeJiraIssue(issue as Parameters<typeof normalizeJiraIssue>[0])),
+    meta: getOptionalMeta(data),
+  };
 }
 
 export async function fetchJiraIssueDetail(
-  webhookUrl: string,
+  n8nBaseUrl: string,
   key: string,
-  n8nBaseUrl?: string,
 ): Promise<JiraIssueDetailed> {
   const data = await requestN8nJson<unknown>(
-    webhookUrl,
-    `/webhook/jira/issues?key=${encodeURIComponent(key)}`,
-    { n8nBaseUrl },
+    n8nBaseUrl,
+    `${WEBHOOK_PATHS.jiraIssues}?key=${encodeURIComponent(key)}`,
   );
   const issues = getArrayField<unknown>(data, 'issues', 'Неожиданный формат ответа Jira issue detail webhook')
     .map((issue) => normalizeJiraIssue(issue as Parameters<typeof normalizeJiraIssue>[0]) as JiraIssueDetailed);
@@ -32,28 +38,24 @@ export async function fetchJiraIssueDetail(
 }
 
 export async function createJiraIssue(
-  webhookUrl: string,
+  n8nBaseUrl: string,
   data: CreateIssueRequest,
-  n8nBaseUrl?: string,
 ): Promise<{ status: string; key: string }> {
-  return requestN8nJson<{ status: string; key: string }>(webhookUrl, '/webhook/jira/issues', {
-    n8nBaseUrl,
+  return requestN8nJson<{ status: string; key: string }>(n8nBaseUrl, WEBHOOK_PATHS.jiraIssues, {
     method: 'POST',
     body: data,
   });
 }
 
 export async function updateJiraIssue(
-  webhookUrl: string,
+  n8nBaseUrl: string,
   key: string,
   data: UpdateIssueRequest,
-  n8nBaseUrl?: string,
 ): Promise<{ status: string; key: string; updates: Record<string, unknown> }> {
   return requestN8nJson<{ status: string; key: string; updates: Record<string, unknown> }>(
-    webhookUrl,
-    `/webhook/jira/issues?key=${encodeURIComponent(key)}`,
+    n8nBaseUrl,
+    `${WEBHOOK_PATHS.jiraIssues}?key=${encodeURIComponent(key)}`,
     {
-      n8nBaseUrl,
       method: 'PATCH',
       body: data,
     },
@@ -61,27 +63,23 @@ export async function updateJiraIssue(
 }
 
 export async function aiGenerate(
-  webhookUrl: string,
+  n8nBaseUrl: string,
   issueType: string,
   userPrompt: string,
-  n8nBaseUrl?: string,
 ): Promise<AiGenerateResponse> {
-  return requestN8nJson<AiGenerateResponse>(webhookUrl, '/webhook/ai-generate', {
-    n8nBaseUrl,
+  return requestN8nJson<AiGenerateResponse>(n8nBaseUrl, WEBHOOK_PATHS.aiGenerate, {
     method: 'POST',
     body: { issue_type: issueType, user_prompt: userPrompt },
   });
 }
 
 export async function aiOptimize(
-  webhookUrl: string,
+  n8nBaseUrl: string,
   fieldType: 'summary' | 'description',
   text: string,
   context?: OptimizeContext,
-  n8nBaseUrl?: string,
 ): Promise<{ optimized_text: string }> {
-  return requestN8nJson<{ optimized_text: string }>(webhookUrl, '/webhook/ai-optimize', {
-    n8nBaseUrl,
+  return requestN8nJson<{ optimized_text: string }>(n8nBaseUrl, WEBHOOK_PATHS.aiOptimize, {
     method: 'POST',
     body: { field_type: fieldType, text, ...context },
   });
@@ -94,12 +92,10 @@ export interface AiChecklistContext {
 }
 
 export async function aiChecklist(
-  webhookUrl: string,
+  n8nBaseUrl: string,
   context: AiChecklistContext,
-  n8nBaseUrl?: string,
 ): Promise<import('../types').ChecklistItem[]> {
-  const data = await requestN8nJson<unknown>(webhookUrl, '/webhook/ai-checklist', {
-    n8nBaseUrl,
+  const data = await requestN8nJson<unknown>(n8nBaseUrl, WEBHOOK_PATHS.aiChecklist, {
     method: 'POST',
     body: context,
   });

@@ -254,12 +254,11 @@ export interface ChecklistContext {
 interface ChecklistEditorProps {
   value: ChecklistItem[];
   onChange: (v: ChecklistItem[]) => void;
-  webhookUrl?: string;
   n8nBaseUrl?: string;
   context?: ChecklistContext;
 }
 
-export function ChecklistEditor({ value, onChange, webhookUrl, n8nBaseUrl, context }: ChecklistEditorProps) {
+export function ChecklistEditor({ value, onChange, n8nBaseUrl, context }: ChecklistEditorProps) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
@@ -282,18 +281,18 @@ export function ChecklistEditor({ value, onChange, webhookUrl, n8nBaseUrl, conte
     onChange(value.filter((_, i) => i !== index));
   };
 
-  const canGenerateAi = !!(webhookUrl && context?.summary?.trim());
+  const canGenerateAi = !!(n8nBaseUrl && context?.summary?.trim());
 
   const handleAiGenerate = async () => {
-    if (!webhookUrl || !context) return;
+    if (!n8nBaseUrl || !context) return;
     setAiLoading(true);
     setAiError(null);
     try {
-      const generated = await aiChecklist(webhookUrl, {
+      const generated = await aiChecklist(n8nBaseUrl, {
         issue_type: context.issue_type,
         summary: context.summary,
         description: context.description,
-      }, n8nBaseUrl);
+      });
       // Merge: append generated items after existing ones, re-ranking
       const merged = [
         ...value,

@@ -8,14 +8,13 @@ import AiDescriptionDiff from './AiDescriptionDiff';
 import { PrioritySelect, IssueTypeSelect, LabelsInput, ChecklistEditor } from './IssueFormFields';
 
 interface Props {
-  webhookUrl: string;
-  n8nBaseUrl?: string;
+  n8nBaseUrl: string;
   availableTypes: string[];
   onCreated: (key: string) => void;
   onClose: () => void;
 }
 
-export default function CreateIssueForm({ webhookUrl, n8nBaseUrl, availableTypes, onCreated, onClose }: Props) {
+export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated, onClose }: Props) {
   const issueTypes = availableTypes.length ? availableTypes : ['User Story'];
   // AI generator state
   const [aiIssueType, setAiIssueType] = useState(issueTypes[0]);
@@ -43,7 +42,7 @@ export default function CreateIssueForm({ webhookUrl, n8nBaseUrl, availableTypes
     setAiLoading(true);
     setAiError(null);
     try {
-      const result = await aiGenerate(webhookUrl, aiIssueType, aiPrompt, n8nBaseUrl);
+      const result = await aiGenerate(n8nBaseUrl, aiIssueType, aiPrompt);
       setSummary(result.summary ?? '');
       setDescription(result.description ?? '');
       setPriority(normalizePriority(result.priority ?? 'Medium'));
@@ -62,7 +61,7 @@ export default function CreateIssueForm({ webhookUrl, n8nBaseUrl, availableTypes
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const { key } = await createJiraIssue(webhookUrl, {
+      const { key } = await createJiraIssue(n8nBaseUrl, {
         summary,
         description,
         priority,
@@ -72,7 +71,7 @@ export default function CreateIssueForm({ webhookUrl, n8nBaseUrl, availableTypes
         productCatalog,
         labels: labels.length ? labels : undefined,
         checklists: checklists.length ? checklists : undefined,
-      }, n8nBaseUrl);
+      });
       onCreated(key);
       onClose();
     } catch {
@@ -152,7 +151,6 @@ export default function CreateIssueForm({ webhookUrl, n8nBaseUrl, availableTypes
           <AiSummaryInput
             value={summary}
             onChange={setSummary}
-            webhookUrl={webhookUrl}
             n8nBaseUrl={n8nBaseUrl}
             context={{ issue_type: issuetype, summary, description }}
           />
@@ -160,7 +158,6 @@ export default function CreateIssueForm({ webhookUrl, n8nBaseUrl, availableTypes
           <AiDescriptionDiff
             value={description}
             onChange={setDescription}
-            webhookUrl={webhookUrl}
             n8nBaseUrl={n8nBaseUrl}
             context={{ issue_type: issuetype, summary, description }}
           />
@@ -224,7 +221,6 @@ export default function CreateIssueForm({ webhookUrl, n8nBaseUrl, availableTypes
           <ChecklistEditor
             value={checklists}
             onChange={setChecklists}
-            webhookUrl={webhookUrl}
             n8nBaseUrl={n8nBaseUrl}
             context={{ issue_type: issuetype, summary, description }}
           />

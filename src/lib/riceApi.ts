@@ -1,11 +1,32 @@
 import type { RiceIssue } from '../types';
-import { getArrayField, requestN8nJson } from './apiClient';
+import { getArrayField, getOptionalMeta, requestN8nJson, WEBHOOK_PATHS, type WebhookMeta } from './apiClient';
 import { normalizeRiceIssue } from './apiNormalizers';
 
-export async function fetchRiceIssues(webhookUrl: string, n8nBaseUrl?: string): Promise<RiceIssue[]> {
-  const data = await requestN8nJson<unknown>(webhookUrl, '/webhook/rice-scoring', { n8nBaseUrl });
-  return getArrayField<unknown>(data, 'issues', 'Неожиданный формат ответа rice-scoring webhook')
-    .map((issue) => normalizeRiceIssue(issue as Parameters<typeof normalizeRiceIssue>[0]));
+export interface RiceIssuesResponse {
+  issues: RiceIssue[];
+  meta: WebhookMeta | null;
+}
+
+async function parseRiceIssues(
+  data: unknown,
+): Promise<RiceIssuesResponse> {
+  return {
+    issues: getArrayField<unknown>(data, 'issues', 'Неожиданный формат ответа rice-scoring webhook')
+      .map((issue) => normalizeRiceIssue(issue as Parameters<typeof normalizeRiceIssue>[0])),
+    meta: getOptionalMeta(data),
+  };
+}
+
+export async function fetchRiceIssues(n8nBaseUrl: string): Promise<RiceIssuesResponse> {
+  const data = await requestN8nJson<unknown>(n8nBaseUrl, WEBHOOK_PATHS.riceScoring);
+  return parseRiceIssues(data);
+}
+
+export async function refreshRiceIssues(n8nBaseUrl: string): Promise<RiceIssuesResponse> {
+  const data = await requestN8nJson<unknown>(n8nBaseUrl, WEBHOOK_PATHS.riceScoringRefresh, {
+    method: 'POST',
+  });
+  return parseRiceIssues(data);
 }
 
 export interface RiceUpdate {
@@ -28,9 +49,8 @@ export interface RiceUpdate {
   td_roi:    number | null;
 }
 
-export async function saveRiceScores(webhookUrl: string, updates: RiceUpdate[], n8nBaseUrl?: string): Promise<void> {
-  await requestN8nJson<unknown>(webhookUrl, '/webhook/rice-score-update', {
-    n8nBaseUrl,
+export async function saveRiceScores(n8nBaseUrl: string, updates: RiceUpdate[]): Promise<void> {
+  await requestN8nJson<unknown>(n8nBaseUrl, WEBHOOK_PATHS.riceScoreUpdate, {
     method: 'POST',
     body: { updates },
   });

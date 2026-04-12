@@ -252,22 +252,6 @@
       }
     },
     {
-      "id": "bb000008-0000-4000-8000-000000000008",
-      "name": "Respond: List Response",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
-      "position": [
-        1560,
-        -100
-      ],
-      "parameters": {
-        "respondWith": "allIncomingItems",
-        "options": {
-          "responseKey": "issues"
-        }
-      }
-    },
-    {
       "id": "bb000009-0000-4000-8000-000000000009",
       "name": "Code: Map Create",
       "type": "n8n-nodes-base.code",
@@ -534,6 +518,95 @@
           }
         }
       }
+    },
+    {
+      "id": "bb000107-0000-4000-8000-000000000107",
+      "name": "Code: Issues List Cache Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        60
+      ],
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst key = 'issues:list:default';\nconst ttlMs = 5 * 60 * 1000;\nconst now = Date.now();\nconst cached = staticData[key];\nif (cached && Array.isArray(cached.issues) && Number(cached.expiresAt) > now) {\n  return [{ json: { cacheHit: true, issues: cached.issues, meta: { fetchedAt: cached.fetchedAt, cached: true, source: 'static-cache' } } }];\n}\nreturn [{ json: { cacheHit: false, cacheKey: key, ttlMs } }];"
+      }
+    },
+    {
+      "id": "bb000108-0000-4000-8000-000000000108",
+      "name": "If: Issues List Cache Hit",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        920,
+        60
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "if-issues-cache-hit",
+              "leftValue": "={{ $json.cacheHit }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "bb000109-0000-4000-8000-000000000109",
+      "name": "Code: Cache Issues List Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "const cacheInput = $('Code: Issues List Cache Lookup').first().json;\nconst staticData = $getWorkflowStaticData('global');\nconst issues = $input.all().map(({ json }) => json);\nconst fetchedAt = new Date().toISOString();\nconst expiresAt = Date.now() + Number(cacheInput.ttlMs ?? 300000);\nstaticData[cacheInput.cacheKey] = { issues, fetchedAt, expiresAt };\nreturn [{ json: { issues, meta: { fetchedAt, cached: false, source: 'jira+datatable' } } }];"
+      }
+    },
+    {
+      "id": "bb000110-0000-4000-8000-000000000110",
+      "name": "Respond: Cached List Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1780,
+        -20
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      }
     }
   ],
   "connections": {
@@ -580,7 +653,7 @@
         ],
         [
           {
-            "node": "Code: Build List JQL",
+            "node": "Code: Issues List Cache Lookup",
             "type": "main",
             "index": 0
           }
@@ -662,7 +735,7 @@
       "main": [
         [
           {
-            "node": "Respond: List Response",
+            "node": "Code: Cache Issues List Response",
             "type": "main",
             "index": 0
           }
@@ -780,6 +853,46 @@
         [
           {
             "node": "Respond: Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Issues List Cache Lookup": {
+      "main": [
+        [
+          {
+            "node": "If: Issues List Cache Hit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Issues List Cache Hit": {
+      "main": [
+        [
+          {
+            "node": "Respond: Cached List Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Build List JQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Cache Issues List Response": {
+      "main": [
+        [
+          {
+            "node": "Respond: Cached List Response",
             "type": "main",
             "index": 0
           }

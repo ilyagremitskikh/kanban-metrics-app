@@ -8,8 +8,7 @@ type DiffState = 'idle' | 'loading' | 'diff';
 interface Props {
   value: string;
   onChange: (v: string) => void;
-  webhookUrl: string;
-  n8nBaseUrl?: string;
+  n8nBaseUrl: string;
   context?: OptimizeContext;
   label?: string;
 }
@@ -17,7 +16,6 @@ interface Props {
 export default function AiDescriptionDiff({
   value,
   onChange,
-  webhookUrl,
   n8nBaseUrl,
   context,
   label = 'Описание (Description)',
@@ -33,7 +31,7 @@ export default function AiDescriptionDiff({
     setState('loading');
     setError(null);
     try {
-      const { optimized_text } = await aiOptimize(webhookUrl, 'description', value, context, n8nBaseUrl);
+      const { optimized_text } = await aiOptimize(n8nBaseUrl, 'description', value, context);
       setAiResult(optimized_text);
       setState('diff');
     } catch {

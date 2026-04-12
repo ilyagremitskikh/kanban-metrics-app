@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Pencil, Loader2, ClipboardList, RefreshCw, ChevronsUp, ChevronUp, Minus, ChevronDown, ChevronsDown, MinusCircle, Equal } from 'lucide-react';
-import { fetchJiraIssues } from '../lib/jiraApi';
 import type { JiraIssueShort } from '../types';
+import { JIRA_BASE_URL } from '../types';
 import IssueSlideOver from './IssueSlideOver';
 import CreateIssueForm from './CreateIssueForm';
 import EditIssueForm from './EditIssueForm';
@@ -10,10 +10,13 @@ import { getUniqueTypes } from '../lib/issueTypes';
 import { normalizePriority } from '../lib/priorities';
 
 interface Props {
-  webhookUrl: string;
-  n8nBaseUrl?: string;
-  jiraBaseUrl?: string;
-  onCountChange?: (count: number) => void;
+  n8nBaseUrl: string;
+  issues: JiraIssueShort[];
+  loading: boolean;
+  refreshing: boolean;
+  error: string | null;
+  lastUpdatedText: string | null;
+  onRefresh: () => void;
 }
 
 type SlideOverMode = { mode: 'create' } | { mode: 'edit'; issueKey: string };
@@ -75,10 +78,7 @@ function groupByCategory(issues: JiraIssueShort[]): { name: string; issues: Jira
 }
 // --- End T-001 ---
 
-export default function IssuesTab({ webhookUrl, n8nBaseUrl, jiraBaseUrl = 'https://jira.tochka.com/browse', onCountChange }: Props) {
-  const [issues, setIssues] = useState<JiraIssueShort[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export default function IssuesTab({ n8nBaseUrl, issues, loading, refreshing, error, lastUpdatedText, onRefresh }: Props) {
   const [slideOver, setSlideOver] = useState<SlideOverMode | null>(null);
   const [scoreSortDir, setScoreSortDir] = useState<'desc' | 'asc' | null>(null);
   // T-003: collapse state — empty set = all expanded
@@ -92,28 +92,8 @@ export default function IssuesTab({ webhookUrl, n8nBaseUrl, jiraBaseUrl = 'https
     return null;
   };
 
-  const load = useCallback(async () => {
-    if (!webhookUrl) {
-      setError('Укажите Webhook URL в настройках');
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchJiraIssues(webhookUrl, n8nBaseUrl);
-      setIssues(data);
-      onCountChange?.(data.length);
-    } catch {
-      setError('Не удалось загрузить задачи. Проверьте подключение.');
-    } finally {
-      setLoading(false);
-    }
-  }, [webhookUrl, n8nBaseUrl, onCountChange]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const handleCreated = () => { load(); };
-  const handleUpdated = () => { load(); };
+  const handleCreated = () => { onRefresh(); };
+  const handleUpdated = () => { onRefresh(); };
 
   const slideOverTitle = slideOver?.mode === 'create'
     ? 'Создать задачу'
@@ -164,14 +144,14 @@ export default function IssuesTab({ webhookUrl, n8nBaseUrl, jiraBaseUrl = 'https
         <h2 className="text-2xl font-extrabold text-donezo-dark tracking-tight">Задачи</h2>
         <div className="flex items-center gap-2">
           <button
-            onClick={load}
+            onClick={onRefresh}
             disabled={loading}
             className="flex items-center gap-1.5 px-4 py-2 bg-white text-gray-600 text-sm font-medium
               border border-gray-200 rounded-full hover:bg-donezo-light hover:text-donezo-dark
               transition-all duration-200 disabled:opacity-50"
             title="Обновить"
           >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={14} className={loading || refreshing ? 'animate-spin' : ''} />
           </button>
           <button
             onClick={() => setSlideOver({ mode: 'create' })}
@@ -191,6 +171,12 @@ export default function IssuesTab({ webhookUrl, n8nBaseUrl, jiraBaseUrl = 'https
         </div>
       )}
 
+      {!error && lastUpdatedText && (
+        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-500">
+          {lastUpdatedText}
+        </div>
+      )}
+
       {/* Loading */}
       {loading && issues.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-gray-400">
@@ -207,7 +193,7 @@ export default function IssuesTab({ webhookUrl, n8nBaseUrl, jiraBaseUrl = 'https
           </div>
           <div className="text-center">
             <p className="font-semibold text-gray-700">Задач пока нет</p>
-            <p className="text-sm text-gray-400 mt-1">Создайте первую задачу или проверьте подключение</p>
+            <p className="text-sm text-gray-400 mt-1">{n8nBaseUrl ? 'Данные загрузятся автоматически при открытии вкладки или по кнопке обновления' : 'Укажите n8n URL в настройках'}</p>
           </div>
           <button
             onClick={() => setSlideOver({ mode: 'create' })}
@@ -296,7 +282,7 @@ export default function IssuesTab({ webhookUrl, n8nBaseUrl, jiraBaseUrl = 'https
                       >
                         <td className="px-5 py-3.5">
                           <a
-                            href={`${jiraBaseUrl}/${issue.key}`}
+                            href={`${JIRA_BASE_URL}/${issue.key}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="font-mono text-xs font-bold text-donezo-primary hover:text-donezo-dark
@@ -370,7 +356,6 @@ export default function IssuesTab({ webhookUrl, n8nBaseUrl, jiraBaseUrl = 'https
       >
         {slideOver?.mode === 'create' && (
           <CreateIssueForm
-            webhookUrl={webhookUrl}
             n8nBaseUrl={n8nBaseUrl}
             availableTypes={availableTypes}
             onCreated={handleCreated}
@@ -379,7 +364,6 @@ export default function IssuesTab({ webhookUrl, n8nBaseUrl, jiraBaseUrl = 'https
         )}
         {slideOver?.mode === 'edit' && (
           <EditIssueForm
-            webhookUrl={webhookUrl}
             n8nBaseUrl={n8nBaseUrl}
             availableTypes={availableTypes}
             issueKey={slideOver.issueKey}
