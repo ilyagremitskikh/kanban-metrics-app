@@ -6,9 +6,11 @@ import IssueSlideOver from './IssueSlideOver';
 import CreateIssueForm from './CreateIssueForm';
 import EditIssueForm from './EditIssueForm';
 import { TypeBadge, StatusBadge } from './Badges';
+import { getUniqueTypes } from '../lib/issueTypes';
 
 interface Props {
   webhookUrl: string;
+  n8nBaseUrl?: string;
   jiraBaseUrl?: string;
   onCountChange?: (count: number) => void;
 }
@@ -78,13 +80,21 @@ function groupByCategory(issues: JiraIssueShort[]): { name: string; issues: Jira
 }
 // --- End T-001 ---
 
-export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.tochka.com/browse', onCountChange }: Props) {
+export default function IssuesTab({ webhookUrl, n8nBaseUrl, jiraBaseUrl = 'https://jira.tochka.com/browse', onCountChange }: Props) {
   const [issues, setIssues] = useState<JiraIssueShort[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [slideOver, setSlideOver] = useState<SlideOverMode | null>(null);
+  const [scoreSortDir, setScoreSortDir] = useState<'desc' | 'asc' | null>(null);
   // T-003: collapse state — empty set = all expanded
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+
+  const getScore = (issue: JiraIssueShort): { value: number; type: 'rice' | 'bug' | 'techdebt' } | null => {
+    if (issue.rice_score != null) return { value: issue.rice_score, type: 'rice' };
+    if (issue.bug_score != null) return { value: issue.bug_score, type: 'bug' };
+    if (issue.td_roi != null) return { value: issue.td_roi, type: 'techdebt' };
+    return null;
+  };
 
   const load = useCallback(async () => {
     if (!webhookUrl) {
@@ -94,7 +104,7 @@ export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.toch
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchJiraIssues(webhookUrl);
+      const data = await fetchJiraIssues(webhookUrl, n8nBaseUrl);
       setIssues(data);
       onCountChange?.(data.length);
     } catch {
@@ -102,7 +112,7 @@ export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.toch
     } finally {
       setLoading(false);
     }
-  }, [webhookUrl, onCountChange]);
+  }, [webhookUrl, n8nBaseUrl, onCountChange]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -115,12 +125,25 @@ export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.toch
       ? `Редактировать: ${slideOver.issueKey}`
       : '';
 
+  const sortedIssues = useMemo(() => {
+    if (!scoreSortDir) return issues;
+    return [...issues].sort((a, b) => {
+      const sa = getScore(a);
+      const sb = getScore(b);
+      if (sa === null && sb === null) return 0;
+      if (sa === null) return 1;
+      if (sb === null) return -1;
+      return scoreSortDir === 'desc' ? sb.value - sa.value : sa.value - sb.value;
+    });
+  }, [issues, scoreSortDir]);
+
   // T-001 + T-002: memoized grouped categories, filter empty
-  const groupedIssues = useMemo(() => groupByCategory(issues), [issues]);
+  const groupedIssues = useMemo(() => groupByCategory(sortedIssues), [sortedIssues]);
   const nonEmptyGroups = useMemo(
     () => groupedIssues.filter(g => g.issues.length > 0),
     [groupedIssues]
   );
+  const availableTypes = useMemo(() => getUniqueTypes(issues), [issues]);
 
   // T-003: toggle collapse
   const toggleCategory = (name: string) => {
@@ -131,6 +154,12 @@ export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.toch
       return next;
     });
   };
+
+  const toggleScoreSort = () => {
+    setScoreSortDir(prev => (prev === null ? 'desc' : prev === 'desc' ? 'asc' : 'desc'));
+  };
+
+  const scoreHeaderSuffix = scoreSortDir === null ? '' : scoreSortDir === 'desc' ? ' ↓' : ' ↑';
 
   return (
     <div className="flex flex-col gap-6 p-6 md:p-8">
@@ -205,6 +234,7 @@ export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.toch
               <col /> {/* Summary — занимает всё остальное */}
               <col className="w-48" />
               <col className="w-28" />
+              <col className="w-32" />
               <col className="w-12" />
             </colgroup>
             <thead>
@@ -224,6 +254,12 @@ export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.toch
                 <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-widest">
                   Приоритет
                 </th>
+                <th
+                  className="text-left px-5 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-widest cursor-pointer select-none"
+                  onClick={toggleScoreSort}
+                >
+                  Score{scoreHeaderSuffix}
+                </th>
                 <th className="w-12" />
               </tr>
             </thead>
@@ -239,7 +275,7 @@ export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.toch
                       onClick={() => toggleCategory(group.name)}
                       className={`cursor-pointer border-t border-gray-100 ${colors.bg} hover:brightness-95 transition-all duration-150`}
                     >
-                      <td colSpan={6} className="px-5 py-2.5">
+                      <td colSpan={7} className="px-5 py-2.5">
                         <div className="flex items-center gap-2">
                           {/* T-003: chevron indicator */}
                           {collapsed
@@ -287,6 +323,24 @@ export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.toch
                         <td className="px-5 py-3.5">
                           <PriorityBadge priority={issue.priority} />
                         </td>
+                        <td className="px-5 py-3.5">
+                          {(() => {
+                            const score = getScore(issue);
+                            if (!score) return null;
+                            const cls = score.type === 'rice'
+                              ? 'bg-blue-50 text-blue-700'
+                              : score.type === 'bug'
+                                ? 'bg-red-50 text-red-700'
+                                : 'bg-amber-50 text-amber-700';
+                            const label = score.type === 'rice' ? 'RICE' : score.type === 'bug' ? 'Bug' : 'TechDebt';
+                            return (
+                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold ${cls}`}>
+                                {score.value}
+                                <span>{label}</span>
+                              </span>
+                            );
+                          })()}
+                        </td>
                         <td className="px-3 py-3.5">
                           <button
                             onClick={() => setSlideOver({ mode: 'edit', issueKey: issue.key })}
@@ -321,6 +375,8 @@ export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.toch
         {slideOver?.mode === 'create' && (
           <CreateIssueForm
             webhookUrl={webhookUrl}
+            n8nBaseUrl={n8nBaseUrl}
+            availableTypes={availableTypes}
             onCreated={handleCreated}
             onClose={() => setSlideOver(null)}
           />
@@ -328,6 +384,8 @@ export default function IssuesTab({ webhookUrl, jiraBaseUrl = 'https://jira.toch
         {slideOver?.mode === 'edit' && (
           <EditIssueForm
             webhookUrl={webhookUrl}
+            n8nBaseUrl={n8nBaseUrl}
+            availableTypes={availableTypes}
             issueKey={slideOver.issueKey}
             onUpdated={handleUpdated}
             onClose={() => setSlideOver(null)}

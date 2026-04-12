@@ -175,16 +175,21 @@ export function buildThroughputWeeks(issues: Issue[]): ThroughputWeek[] {
 export function buildThroughputWeeksFromRaw(
   items: ThroughputIssueRaw[],
 ): ThroughputWeek[] {
-  const weekMap = new Map<string, { total: number; byType: Record<string, number> }>();
+  const weekMap = new Map<
+    string,
+    { total: number; byType: Record<string, number>; byAssignee: Record<string, number> }
+  >();
   for (const item of items) {
     const rd = item.resolutionDate;
     if (!rd) continue;
-    const typeName = item.issueType;
+    const typeName = item.issueType?.trim() ? item.issueType.trim() : 'Неизвестный тип';
+    const assigneeName = item.assignee?.trim() ? item.assignee.trim() : 'Не назначен';
     const monday = toMonday(new Date(rd)).toISOString().slice(0, 10);
-    if (!weekMap.has(monday)) weekMap.set(monday, { total: 0, byType: {} });
+    if (!weekMap.has(monday)) weekMap.set(monday, { total: 0, byType: {}, byAssignee: {} });
     const entry = weekMap.get(monday)!;
     entry.total += 1;
     entry.byType[typeName] = (entry.byType[typeName] ?? 0) + 1;
+    entry.byAssignee[assigneeName] = (entry.byAssignee[assigneeName] ?? 0) + 1;
   }
   if (weekMap.size === 0) return [];
   const keys = [...weekMap.keys()].sort();
@@ -194,7 +199,12 @@ export function buildThroughputWeeksFromRaw(
   while (cur <= last) {
     const k = cur.toISOString().slice(0, 10);
     const entry = weekMap.get(k);
-    result.push({ date: k, count: entry?.total ?? 0, byType: entry?.byType ?? {} });
+    result.push({
+      date: k,
+      count: entry?.total ?? 0,
+      byType: entry?.byType ?? {},
+      byAssignee: entry?.byAssignee ?? {},
+    });
     cur.setDate(cur.getDate() + 7);
   }
   return result;

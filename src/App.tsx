@@ -22,11 +22,13 @@ import { AgingWIP } from './components/AgingWIP';
 import { IssuesTable } from './components/IssuesTable';
 import { RiceSection } from './components/RiceSection';
 import IssuesTab from './components/IssuesTab';
+import { getUniqueTypes } from './lib/issueTypes';
 
 import type { Issue, ThroughputWeek, Settings as SettingsType } from './types';
 
 const DEFAULT_SETTINGS: SettingsType = {
   webhookUrl: '',
+  n8nBaseUrl: '',
   jiraBaseUrl: 'https://jira.tochka.com/browse',
   mode: 'standard',
   projectKey: '',
@@ -97,6 +99,7 @@ export default function App() {
   };
 
   const tableRows      = hasData ? buildTableRows(issues) : [];
+  const availableTypes = Array.from(new Set([...settings.issueTypes, ...getUniqueTypes(issues)])).sort((a, b) => a.localeCompare(b, 'ru'));
   const ltValues       = tableRows.filter((r) => r.leadTime      !== null).map((r) => r.leadTime      as number);
   const ctValues       = tableRows.filter((r) => r.devCycleTime  !== null).map((r) => r.devCycleTime  as number);
   const upstreamValues = tableRows.filter((r) => r.upstreamTime  !== null).map((r) => r.upstreamTime  as number);
@@ -172,6 +175,7 @@ export default function App() {
         {activeTab === 'settings' && (
           <SettingsPanel
             settings={settings}
+            availableTypes={availableTypes}
             onChange={setSettings}
             onFetch={handleFetch}
             loading={loading}
@@ -245,7 +249,7 @@ export default function App() {
                         </span>
                       </span>
                     </h3>
-                    <AgingWIP issues={issues} bucket="upstream" thresholdValues={upstreamValues} />
+                    <AgingWIP issues={issues} jiraBaseUrl={settings.jiraBaseUrl ?? 'https://jira.tochka.com/browse'} bucket="upstream" thresholdValues={upstreamValues} />
                   </div>
                   <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-auto overflow-hidden">
                     <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-1.5">
@@ -256,11 +260,11 @@ export default function App() {
                         </span>
                       </span>
                     </h3>
-                    <AgingWIP issues={issues} bucket="downstream" thresholdValues={ctValues} />
+                    <AgingWIP issues={issues} jiraBaseUrl={settings.jiraBaseUrl ?? 'https://jira.tochka.com/browse'} bucket="downstream" thresholdValues={ctValues} />
                   </div>
                 </div>
 
-                <IssuesTable rows={tableRows} />
+                <IssuesTable rows={tableRows} jiraBaseUrl={settings.jiraBaseUrl ?? 'https://jira.tochka.com/browse'} />
               </>
             )}
           </>
@@ -269,6 +273,8 @@ export default function App() {
         <div className={activeTab === 'rice' ? 'block' : 'hidden'}>
           <RiceSection
             webhookUrl={settings.webhookUrl}
+            n8nBaseUrl={settings.n8nBaseUrl}
+            jiraBaseUrl={settings.jiraBaseUrl ?? 'https://jira.tochka.com/browse'}
             onSendToQueue={(items) => setQueuePreset(items)}
             onSwitchToMetrics={() => setActiveTab('metrics')}
             onIssuesCountChange={setRiceCount}
@@ -278,6 +284,7 @@ export default function App() {
         {activeTab === 'issues' && (
           <IssuesTab
             webhookUrl={settings.webhookUrl}
+            n8nBaseUrl={settings.n8nBaseUrl}
             jiraBaseUrl={settings.jiraBaseUrl ?? 'https://jira.tochka.com/browse'}
             onCountChange={setJiraIssuesCount}
           />

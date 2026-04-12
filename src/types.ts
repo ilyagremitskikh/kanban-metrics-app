@@ -29,11 +29,13 @@ export interface ThroughputWeek {
   date: string;
   count: number;
   byType?: Record<string, number>;
+  byAssignee?: Record<string, number>;
 }
 
 export interface ThroughputIssueRaw {
   key: string;
   issueType: string;
+  assignee?: string | null;
   resolution: string | null;
   resolutionDate: string | null;
 }
@@ -51,6 +53,7 @@ export interface SortState {
 export interface Settings {
   webhookUrl: string;
   throughputWebhookUrl?: string;
+  n8nBaseUrl?: string;
   jiraBaseUrl?: string;
   mode: JQLMode;
   projectKey: string;
@@ -102,6 +105,9 @@ export interface JiraIssueShort {
   status: string;
   priority: string;
   issuetype: string;
+  rice_score?: number | null;
+  bug_score?: number | null;
+  td_roi?: number | null;
   description?: string;
   project?: string;
   assignee?: string;

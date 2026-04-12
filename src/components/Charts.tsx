@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { percentile, fmtNum, fmtWeekLabel } from '../lib/utils';
 import type { TableRow, ThroughputWeek } from '../types';
+import { getTypeColor } from '../lib/issueTypes';
 
 Chart.register(...registerables);
 
@@ -114,35 +115,34 @@ export function ScatterChart({ id, rows, field, color, values }: ScatterProps) {
 
 // ─── Throughput Chart ─────────────────────────────────────────────────────────
 
-const TYPE_COLORS: Record<string, string> = {
-  'Задача':     '#10b981',
-  'User Story': '#10b981',
-  'Ошибка':     '#ef4444',
-  'Техдолг':    '#f59e0b',
-};
-const DEFAULT_TYPE_COLOR = '#64748b';
-function typeColor(name: string): string { return TYPE_COLORS[name] ?? DEFAULT_TYPE_COLOR; }
-
 export function ThroughputChart({ weeks }: { weeks: ThroughputWeek[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<Chart | null>(null);
+  const [groupMode, setGroupMode] = useState<'byType' | 'byAssignee'>('byType');
 
   useEffect(() => {
     if (!canvasRef.current) return;
     chartRef.current?.destroy();
 
-    const hasBreakdown = weeks.some((w) => w.byType && Object.keys(w.byType).length > 0);
+    const selectedBreakdown = groupMode === 'byAssignee'
+      ? (w: ThroughputWeek) => w.byAssignee
+      : (w: ThroughputWeek) => w.byType;
+
+    const hasBreakdown = weeks.some((w) => {
+      const breakdown = selectedBreakdown(w);
+      return breakdown && Object.keys(breakdown).length > 0;
+    });
     const labels = weeks.map((w) => fmtWeekLabel(w.date));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let datasets: any[];
     if (hasBreakdown) {
-      const allTypes = [...new Set(weeks.flatMap((w) => Object.keys(w.byType ?? {})))];
-      datasets = allTypes.map((t) => ({
-        label: t,
-        data: weeks.map((w) => w.byType?.[t] ?? 0),
-        backgroundColor: typeColor(t) + 'cc',
-        borderColor: typeColor(t),
+      const allGroups = [...new Set(weeks.flatMap((w) => Object.keys(selectedBreakdown(w) ?? {})))];
+      datasets = allGroups.map((groupName) => ({
+        label: groupName,
+        data: weeks.map((w) => selectedBreakdown(w)?.[groupName] ?? 0),
+        backgroundColor: getTypeColor(groupName) + 'cc',
+        borderColor: getTypeColor(groupName),
         borderWidth: 1,
         borderRadius: 4,
         stack: 'tp',
@@ -172,9 +172,38 @@ export function ThroughputChart({ weeks }: { weeks: ThroughputWeek[] }) {
         },
       },
     });
-  }, [weeks]);
+  }, [weeks, groupMode]);
 
   useEffect(() => () => { chartRef.current?.destroy(); }, []);
-  return <div className="relative h-[260px]"><canvas ref={canvasRef} /></div>;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setGroupMode('byType')}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+            groupMode === 'byType'
+              ? 'bg-donezo-dark text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          По типу задач
+        </button>
+        <button
+          type="button"
+          onClick={() => setGroupMode('byAssignee')}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+            groupMode === 'byAssignee'
+              ? 'bg-donezo-dark text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          По исполнителю
+        </button>
+      </div>
+      <div className="relative h-[260px]">
+        <canvas ref={canvasRef} />
+      </div>
+    </div>
+  );
 }
-

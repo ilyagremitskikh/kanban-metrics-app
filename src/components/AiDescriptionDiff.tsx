@@ -9,6 +9,7 @@ interface Props {
   value: string;
   onChange: (v: string) => void;
   webhookUrl: string;
+  n8nBaseUrl?: string;
   context?: OptimizeContext;
   label?: string;
 }
@@ -17,6 +18,7 @@ export default function AiDescriptionDiff({
   value,
   onChange,
   webhookUrl,
+  n8nBaseUrl,
   context,
   label = 'Описание (Description)',
 }: Props) {
@@ -31,7 +33,7 @@ export default function AiDescriptionDiff({
     setState('loading');
     setError(null);
     try {
-      const { optimized_text } = await aiOptimize(webhookUrl, 'description', value, context);
+      const { optimized_text } = await aiOptimize(webhookUrl, 'description', value, context, n8nBaseUrl);
       setAiResult(optimized_text);
       setState('diff');
     } catch {

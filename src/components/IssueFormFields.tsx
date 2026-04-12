@@ -184,15 +184,15 @@ export { normalizePriority };
 
 // ── IssueTypeSelect ───────────────────────────────────────────────────────────
 
-const ISSUE_TYPES = ['User Story', 'Задача', 'Ошибка', 'Техдолг'];
-
 interface IssueTypeSelectProps {
   value: string;
+  availableTypes: string[];
   onChange: (v: string) => void;
   disabled?: boolean;
 }
 
-export function IssueTypeSelect({ value, onChange, disabled }: IssueTypeSelectProps) {
+export function IssueTypeSelect({ value, availableTypes, onChange, disabled }: IssueTypeSelectProps) {
+  const options = availableTypes.length ? availableTypes : [value];
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
@@ -206,7 +206,7 @@ export function IssueTypeSelect({ value, onChange, disabled }: IssueTypeSelectPr
           focus:bg-white focus:border-donezo-primary focus:ring-2 focus:ring-donezo-light
           focus:outline-none transition-all duration-200 cursor-pointer disabled:opacity-60"
       >
-        {ISSUE_TYPES.map(t => (
+        {options.map(t => (
           <option key={t} value={t}>{t}</option>
         ))}
       </select>
@@ -290,10 +290,11 @@ interface ChecklistEditorProps {
   value: ChecklistItem[];
   onChange: (v: ChecklistItem[]) => void;
   webhookUrl?: string;
+  n8nBaseUrl?: string;
   context?: ChecklistContext;
 }
 
-export function ChecklistEditor({ value, onChange, webhookUrl, context }: ChecklistEditorProps) {
+export function ChecklistEditor({ value, onChange, webhookUrl, n8nBaseUrl, context }: ChecklistEditorProps) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
@@ -327,7 +328,7 @@ export function ChecklistEditor({ value, onChange, webhookUrl, context }: Checkl
         issue_type: context.issue_type,
         summary: context.summary,
         description: context.description,
-      });
+      }, n8nBaseUrl);
       // Merge: append generated items after existing ones, re-ranking
       const merged = [
         ...value,

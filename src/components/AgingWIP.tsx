@@ -7,8 +7,6 @@ import { TypeBadge, StatusBadge } from './Badges';
 
 Chart.register(...registerables);
 
-const JIRA_BASE = 'https://jira.tochka.com/browse';
-
 interface AgedIssue {
   key: string;
   summary: string;
@@ -19,6 +17,7 @@ interface AgedIssue {
 
 interface Props {
   issues: Issue[];
+  jiraBaseUrl: string;
   bucket: 'upstream' | 'downstream';
   thresholdValues: number[];
 }
@@ -34,7 +33,7 @@ function deltaClass(age: number, p: number | null): string {
   return age > p ? 'text-red-600 font-semibold' : 'text-emerald-600';
 }
 
-export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
+export function AgingWIP({ issues, jiraBaseUrl, bucket, thresholdValues }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<Chart | null>(null);
   const [showTable, setShowTable] = useState(false);
@@ -196,7 +195,7 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
                   <tr key={i.key} className={`border-b border-gray-50 last:border-none hover:bg-donezo-light/30 transition-colors duration-200 group wip-row-${color}`}>
                     <td className="px-3 py-3.5 align-top">
                       <a
-                        href={`${JIRA_BASE}/${i.key}`}
+                        href={`${jiraBaseUrl}/${i.key}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="font-mono font-bold text-donezo-dark hover:text-donezo-primary hover:underline transition-colors mr-2 whitespace-nowrap"

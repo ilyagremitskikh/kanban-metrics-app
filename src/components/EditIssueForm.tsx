@@ -8,6 +8,8 @@ import { PrioritySelect, LabelsInput, ChecklistEditor, normalizePriority } from 
 
 interface Props {
   webhookUrl: string;
+  n8nBaseUrl?: string;
+  availableTypes: string[];
   issueKey: string;
   onUpdated: () => void;
   onClose: () => void;
@@ -19,7 +21,7 @@ function formatDate(iso: string) {
   });
 }
 
-export default function EditIssueForm({ webhookUrl, issueKey, onUpdated, onClose }: Props) {
+export default function EditIssueForm({ webhookUrl, n8nBaseUrl, availableTypes, issueKey, onUpdated, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const initial = useRef<JiraIssueDetailed | null>(null);
@@ -44,7 +46,7 @@ export default function EditIssueForm({ webhookUrl, issueKey, onUpdated, onClose
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    fetchJiraIssueDetail(webhookUrl, issueKey)
+    fetchJiraIssueDetail(webhookUrl, issueKey, n8nBaseUrl)
       .then(issue => {
         if (cancelled) return;
         initial.current = issue;
@@ -63,7 +65,7 @@ export default function EditIssueForm({ webhookUrl, issueKey, onUpdated, onClose
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [webhookUrl, issueKey]);
+  }, [webhookUrl, issueKey, n8nBaseUrl]);
 
   // Dirty tracking
   const getDirtyFields = (): UpdateIssueRequest => {
@@ -90,7 +92,7 @@ export default function EditIssueForm({ webhookUrl, issueKey, onUpdated, onClose
     setSubmitError(null);
     setSubmitSuccess(false);
     try {
-      await updateJiraIssue(webhookUrl, issueKey, updates);
+      await updateJiraIssue(webhookUrl, issueKey, updates, n8nBaseUrl);
       // Update initial ref so dirty tracking resets
       if (initial.current) {
         initial.current = {
@@ -134,6 +136,7 @@ export default function EditIssueForm({ webhookUrl, issueKey, onUpdated, onClose
   }
 
   const dirtyCount = Object.keys(getDirtyFields()).length;
+  const fallbackIssueType = initial.current?.issuetype ?? availableTypes[0] ?? '';
 
   return (
     <form onSubmit={handleSave} className="flex flex-col h-full">
@@ -156,14 +159,16 @@ export default function EditIssueForm({ webhookUrl, issueKey, onUpdated, onClose
           value={summary}
           onChange={setSummary}
           webhookUrl={webhookUrl}
-          context={{ issue_type: initial.current?.issuetype, summary, description, comments: comments.length ? comments : undefined }}
+          n8nBaseUrl={n8nBaseUrl}
+          context={{ issue_type: fallbackIssueType, summary, description, comments: comments.length ? comments : undefined }}
         />
 
         <AiDescriptionDiff
           value={description}
           onChange={setDescription}
           webhookUrl={webhookUrl}
-          context={{ issue_type: initial.current?.issuetype, summary, description, comments: comments.length ? comments : undefined }}
+          n8nBaseUrl={n8nBaseUrl}
+          context={{ issue_type: fallbackIssueType, summary, description, comments: comments.length ? comments : undefined }}
         />
 
         <PrioritySelect value={priority} onChange={setPriority} />
@@ -172,8 +177,9 @@ export default function EditIssueForm({ webhookUrl, issueKey, onUpdated, onClose
           value={checklists}
           onChange={setChecklists}
           webhookUrl={webhookUrl}
+          n8nBaseUrl={n8nBaseUrl}
           context={{
-            issue_type: initial.current?.issuetype ?? '',
+            issue_type: fallbackIssueType,
             summary,
             description,
           }}

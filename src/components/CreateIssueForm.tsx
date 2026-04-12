@@ -8,15 +8,16 @@ import { PrioritySelect, IssueTypeSelect, LabelsInput, ChecklistEditor, normaliz
 
 interface Props {
   webhookUrl: string;
+  n8nBaseUrl?: string;
+  availableTypes: string[];
   onCreated: (key: string) => void;
   onClose: () => void;
 }
 
-const ISSUE_TYPES = ['User Story', 'Задача', 'Ошибка', 'Техдолг'];
-
-export default function CreateIssueForm({ webhookUrl, onCreated, onClose }: Props) {
+export default function CreateIssueForm({ webhookUrl, n8nBaseUrl, availableTypes, onCreated, onClose }: Props) {
+  const issueTypes = availableTypes.length ? availableTypes : ['User Story'];
   // AI generator state
-  const [aiIssueType, setAiIssueType] = useState(ISSUE_TYPES[0]);
+  const [aiIssueType, setAiIssueType] = useState(issueTypes[0]);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -25,7 +26,7 @@ export default function CreateIssueForm({ webhookUrl, onCreated, onClose }: Prop
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('Нормальный');
-  const [issuetype, setIssuetype] = useState(ISSUE_TYPES[0]);
+  const [issuetype, setIssuetype] = useState(issueTypes[0]);
   const [needToUpdateSource, setNeedToUpdateSource] = useState(false);
   const [slService, setSlService] = useState('TB\\expresscredit');
   const [productCatalog, setProductCatalog] = useState('Экспресс-кредит');
@@ -41,7 +42,7 @@ export default function CreateIssueForm({ webhookUrl, onCreated, onClose }: Prop
     setAiLoading(true);
     setAiError(null);
     try {
-      const result = await aiGenerate(webhookUrl, aiIssueType, aiPrompt);
+      const result = await aiGenerate(webhookUrl, aiIssueType, aiPrompt, n8nBaseUrl);
       setSummary(result.summary ?? '');
       setDescription(result.description ?? '');
       setPriority(normalizePriority(result.priority ?? 'Medium'));
@@ -70,7 +71,7 @@ export default function CreateIssueForm({ webhookUrl, onCreated, onClose }: Prop
         productCatalog,
         labels: labels.length ? labels : undefined,
         checklists: checklists.length ? checklists : undefined,
-      });
+      }, n8nBaseUrl);
       onCreated(key);
       onClose();
     } catch {
@@ -106,7 +107,7 @@ export default function CreateIssueForm({ webhookUrl, onCreated, onClose }: Prop
                   focus:border-donezo-primary focus:ring-2 focus:ring-donezo-primary/20 focus:outline-none
                   transition-all duration-200 cursor-pointer disabled:opacity-60"
               >
-                {ISSUE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                {issueTypes.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
 
@@ -151,6 +152,7 @@ export default function CreateIssueForm({ webhookUrl, onCreated, onClose }: Prop
             value={summary}
             onChange={setSummary}
             webhookUrl={webhookUrl}
+            n8nBaseUrl={n8nBaseUrl}
             context={{ issue_type: issuetype, summary, description }}
           />
 
@@ -158,12 +160,13 @@ export default function CreateIssueForm({ webhookUrl, onCreated, onClose }: Prop
             value={description}
             onChange={setDescription}
             webhookUrl={webhookUrl}
+            n8nBaseUrl={n8nBaseUrl}
             context={{ issue_type: issuetype, summary, description }}
           />
 
           <div className="grid grid-cols-2 gap-4">
             <PrioritySelect value={priority} onChange={setPriority} />
-            <IssueTypeSelect value={issuetype} onChange={setIssuetype} />
+            <IssueTypeSelect value={issuetype} availableTypes={issueTypes} onChange={setIssuetype} />
           </div>
 
           {/* Custom fields */}
@@ -221,6 +224,7 @@ export default function CreateIssueForm({ webhookUrl, onCreated, onClose }: Prop
             value={checklists}
             onChange={setChecklists}
             webhookUrl={webhookUrl}
+            n8nBaseUrl={n8nBaseUrl}
             context={{ issue_type: issuetype, summary, description }}
           />
         </fieldset>

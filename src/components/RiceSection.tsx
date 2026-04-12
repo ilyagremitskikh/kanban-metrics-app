@@ -3,7 +3,6 @@ import { fetchRiceIssues, saveRiceScores, type RiceUpdate } from '../lib/riceApi
 import type { RiceIssue } from '../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const JIRA_BASE      = 'https://jira.tochka.com/browse';
 const IMPACT_OPTIONS = [0.25, 0.5, 1, 2, 3];
 const CONF_OPTIONS   = [25, 50, 80, 100];
 const EFFORT_MIN     = 0.5;
@@ -171,13 +170,13 @@ function SortChevron({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) 
 }
 
 // ── Jira link cell ────────────────────────────────────────────────────────────
-function IssueLink({ issueKey, isDirty }: { issueKey: string; isDirty: boolean }) {
+function IssueLink({ issueKey, isDirty, jiraBaseUrl }: { issueKey: string; isDirty: boolean; jiraBaseUrl: string }) {
   return (
     <td className="px-3 py-2.5 align-middle whitespace-nowrap relative">
       {isDirty && (
         <div className="absolute left-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-orange-400 shadow-sm" title="Несохраненные изменения" />
       )}
-      <a href={`${JIRA_BASE}/${issueKey}`} target="_blank" rel="noopener noreferrer"
+      <a href={`${jiraBaseUrl}/${issueKey}`} target="_blank" rel="noopener noreferrer"
         className="font-semibold text-blue-600 hover:text-blue-800 hover:underline">
         {issueKey}
       </a>
@@ -188,13 +187,15 @@ function IssueLink({ issueKey, isDirty }: { issueKey: string; isDirty: boolean }
 // ── Main props ────────────────────────────────────────────────────────────────
 interface Props {
   webhookUrl: string;
+  n8nBaseUrl?: string;
+  jiraBaseUrl: string;
   onSendToQueue: (items: string[]) => void;
   onSwitchToMetrics: () => void;
   onIssuesCountChange?: (count: number) => void;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIssuesCountChange }: Props) {
+export function RiceSection({ webhookUrl, n8nBaseUrl, jiraBaseUrl, onSendToQueue, onSwitchToMetrics, onIssuesCountChange }: Props) {
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [scoringTab, setScoringTab] = useState<ScoringTab>('rice');
@@ -224,7 +225,7 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
     if (!webhookUrl) { setMsg({ text: 'Укажите Webhook URL в настройках', ok: false }); return; }
     setLoading(true); setMsg(null);
     try {
-      const data = await fetchRiceIssues(webhookUrl);
+      const data = await fetchRiceIssues(webhookUrl, n8nBaseUrl);
       setIssues(data);
       const riceMap = new Map<string, ScoreRow>();
       const bugMap  = new Map<string, BugRow>();
@@ -284,7 +285,7 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
       });
 
       if (!updates.length) { setMsg({ text: 'Нет задач с корректно заполненными оценками для сохранения', ok: false }); return; }
-      await saveRiceScores(webhookUrl, updates);
+      await saveRiceScores(webhookUrl, updates, n8nBaseUrl);
       setDirtyKeys(new Set());
       setMsg({ text: `Успешно сохранено ${updates.length} задач`, ok: true });
     } catch (e) {
@@ -762,7 +763,7 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
                       {dirtyKeys.has(issue.key) && <div className="absolute left-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-orange-400 shadow-sm" title="Несохраненные изменения" />}
                       {score !== null ? idx + 1 : '—'}
                     </td>
-                    <IssueLink issueKey={issue.key} isDirty={false} />
+                    <IssueLink issueKey={issue.key} isDirty={false} jiraBaseUrl={jiraBaseUrl} />
                     <td className="px-3 py-2.5 align-middle text-slate-900 min-w-[200px]">{issue.summary}</td>
                     <td className="px-3 py-2.5 align-middle text-xs text-gray-500 whitespace-nowrap">{issue.status}</td>
                     <td className="px-3 py-2.5 align-middle">
@@ -850,7 +851,7 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
                       {dirtyKeys.has(issue.key) && <div className="absolute left-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-orange-400 shadow-sm" title="Несохраненные изменения" />}
                       {score !== null ? idx + 1 : '—'}
                     </td>
-                    <IssueLink issueKey={issue.key} isDirty={false} />
+                    <IssueLink issueKey={issue.key} isDirty={false} jiraBaseUrl={jiraBaseUrl} />
                     <td className="px-3 py-2.5 align-middle text-slate-900 min-w-[200px]">{issue.summary}</td>
                     <td className="px-3 py-2.5 align-middle text-xs text-gray-500 whitespace-nowrap">{issue.status}</td>
                     <td className="px-3 py-2.5 align-middle">
@@ -931,7 +932,7 @@ export function RiceSection({ webhookUrl, onSendToQueue, onSwitchToMetrics, onIs
                       {dirtyKeys.has(issue.key) && <div className="absolute left-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-orange-400 shadow-sm" title="Несохраненные изменения" />}
                       {roi !== null ? idx + 1 : '—'}
                     </td>
-                    <IssueLink issueKey={issue.key} isDirty={false} />
+                    <IssueLink issueKey={issue.key} isDirty={false} jiraBaseUrl={jiraBaseUrl} />
                     <td className="px-3 py-2.5 align-middle text-slate-900 min-w-[200px]">{issue.summary}</td>
                     <td className="px-3 py-2.5 align-middle text-xs text-gray-500 whitespace-nowrap">{issue.status}</td>
                     <td className="px-3 py-2.5 align-middle">

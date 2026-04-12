@@ -1,13 +1,14 @@
 import type { RiceIssue } from '../types';
 
 /** In dev mode, use relative paths so Vite proxy handles CORS. In prod, use full URL. */
-function riceUrl(webhookUrl: string, path: string): string {
+function riceUrl(webhookUrl: string, path: string, n8nBaseUrl?: string): string {
   if (import.meta.env.DEV) return path;
-  return `${new URL(webhookUrl).origin}${path}`;
+  const base = (n8nBaseUrl?.trim() || new URL(webhookUrl).origin).replace(/\/$/, '');
+  return `${base}${path}`;
 }
 
-export async function fetchRiceIssues(webhookUrl: string): Promise<RiceIssue[]> {
-  const res = await fetch(riceUrl(webhookUrl, '/webhook/rice-scoring'));
+export async function fetchRiceIssues(webhookUrl: string, n8nBaseUrl?: string): Promise<RiceIssue[]> {
+  const res = await fetch(riceUrl(webhookUrl, '/webhook/rice-scoring', n8nBaseUrl));
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   return (data.issues ?? []) as RiceIssue[];
@@ -33,8 +34,8 @@ export interface RiceUpdate {
   td_roi:    number | null;
 }
 
-export async function saveRiceScores(webhookUrl: string, updates: RiceUpdate[]): Promise<void> {
-  const res = await fetch(riceUrl(webhookUrl, '/webhook/rice-score-update'), {
+export async function saveRiceScores(webhookUrl: string, updates: RiceUpdate[], n8nBaseUrl?: string): Promise<void> {
+  const res = await fetch(riceUrl(webhookUrl, '/webhook/rice-score-update', n8nBaseUrl), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ updates }),

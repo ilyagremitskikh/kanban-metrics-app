@@ -1,0 +1,80 @@
+const PALETTE = [
+  '#10b981',
+  '#ef4444',
+  '#f59e0b',
+  '#3b82f6',
+  '#8b5cf6',
+  '#ec4899',
+  '#14b8a6',
+  '#f97316',
+  '#06b6d4',
+  '#84cc16',
+  '#6366f1',
+  '#d946ef',
+] as const;
+
+const BADGE_CLASSES = [
+  { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100' },
+  { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-100' },
+  { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-100' },
+  { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-100' },
+  { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-100' },
+  { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-100' },
+  { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-100' },
+  { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-100' },
+  { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-100' },
+  { bg: 'bg-lime-50', text: 'text-lime-700', border: 'border-lime-100' },
+  { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-100' },
+  { bg: 'bg-fuchsia-50', text: 'text-fuchsia-700', border: 'border-fuchsia-100' },
+] as const;
+
+type IssueLike = {
+  issuetype?: string | null;
+  type?: string | null;
+  issueType?: string | null;
+  issue_type?: string | null;
+};
+
+function normalizeType(value: string | null | undefined): string {
+  return (value ?? '').trim();
+}
+
+function hashType(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function pickTypeName(issue: IssueLike): string | null | undefined {
+  return issue.issuetype ?? issue.type ?? issue.issueType ?? issue.issue_type;
+}
+
+export function getUniqueTypes(issues: IssueLike[]): string[] {
+  const unique = new Set<string>();
+  for (const issue of issues) {
+    const typeName = pickTypeName(issue);
+    if (!typeName) continue;
+    const normalized = normalizeType(typeName);
+    if (!normalized) continue;
+    unique.add(normalized);
+  }
+  return [...unique].sort((a, b) => a.localeCompare(b, 'ru'));
+}
+
+export function getTypeColor(typeName: string | null | undefined): string {
+  const normalized = normalizeType(typeName);
+  if (!normalized) return PALETTE[0];
+  return PALETTE[hashType(normalized) % PALETTE.length];
+}
+
+export function getTypeBadgeClasses(typeName: string | null | undefined): {
+  bg: string;
+  text: string;
+  border: string;
+} {
+  const normalized = normalizeType(typeName);
+  if (!normalized) return BADGE_CLASSES[0];
+  return BADGE_CLASSES[hashType(normalized) % BADGE_CLASSES.length];
+}
