@@ -1,5 +1,15 @@
+export const WEBHOOK_PATHS = {
+  kanbanMetrics: '/webhook/kanban-metrics',
+  jiraIssues: '/webhook/jira/issues',
+  throughput: '/webhook/throughput',
+  riceScoring: '/webhook/rice-scoring',
+  riceScoreUpdate: '/webhook/rice-score-update',
+  aiGenerate: '/webhook/ai-generate',
+  aiOptimize: '/webhook/ai-optimize',
+  aiChecklist: '/webhook/ai-checklist',
+} as const;
+
 interface N8nRequestOptions {
-  n8nBaseUrl?: string;
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
 }
@@ -8,16 +18,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function toProxyUrl(fullUrl: string): string {
-  if (!import.meta.env.DEV) return fullUrl;
-  const u = new URL(fullUrl);
-  return u.pathname + u.search;
-}
-
-function toN8nPathUrl(webhookUrl: string, path: string, n8nBaseUrl?: string): string {
+function buildUrl(n8nBaseUrl: string, path: string): string {
   if (import.meta.env.DEV) return path;
-  const base = (n8nBaseUrl?.trim() || new URL(webhookUrl).origin).replace(/\/$/, '');
-  return `${base}${path}`;
+  return `${n8nBaseUrl.replace(/\/$/, '')}${path}`;
 }
 
 function withJsonInit(method: string, body?: unknown): RequestInit {
@@ -35,21 +38,13 @@ async function requestJson<T>(url: string, init: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function requestWebhookJson<T>(
-  webhookUrl: string,
-  method: 'GET' | 'POST',
-  body?: unknown,
-): Promise<T> {
-  return requestJson<T>(toProxyUrl(webhookUrl), withJsonInit(method, body));
-}
-
 export async function requestN8nJson<T>(
-  webhookUrl: string,
+  n8nBaseUrl: string,
   path: string,
   options: N8nRequestOptions = {},
 ): Promise<T> {
-  const { method = 'GET', body, n8nBaseUrl } = options;
-  return requestJson<T>(toN8nPathUrl(webhookUrl, path, n8nBaseUrl), withJsonInit(method, body));
+  const { method = 'GET', body } = options;
+  return requestJson<T>(buildUrl(n8nBaseUrl, path), withJsonInit(method, body));
 }
 
 export function getArrayField<T>(data: unknown, key: string, errorMessage: string): T[] {

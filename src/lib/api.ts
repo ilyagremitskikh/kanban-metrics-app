@@ -1,9 +1,19 @@
 import type { Issue, Settings, ThroughputIssueRaw } from '../types';
-import { getArrayField, requestWebhookJson } from './apiClient';
+import { getArrayField, requestN8nJson, WEBHOOK_PATHS } from './apiClient';
 import { normalizeIssue, normalizeThroughputIssue } from './apiNormalizers';
+import { buildMetricsRequestBody } from './metricsQuery';
 
-async function callWebhook(url: string, body: object): Promise<Issue[]> {
-  const data = await requestWebhookJson<unknown>(url, 'POST', body);
+export async function fetchIssues(
+  settings: Settings,
+  onProgress: (msg: string) => void,
+): Promise<Issue[]> {
+  const { n8nBaseUrl } = settings;
+
+  onProgress('Запрашиваем данные из Jira через n8n…');
+  const data = await requestN8nJson<unknown>(n8nBaseUrl, WEBHOOK_PATHS.kanbanMetrics, {
+    method: 'POST',
+    body: buildMetricsRequestBody(settings),
+  });
   return getArrayField<unknown>(
     data,
     'issues',
@@ -11,31 +21,12 @@ async function callWebhook(url: string, body: object): Promise<Issue[]> {
   ).map((item) => normalizeIssue(item as Parameters<typeof normalizeIssue>[0]));
 }
 
-export async function fetchIssues(
-  settings: Settings,
-  onProgress: (msg: string) => void,
-): Promise<Issue[]> {
-  const { webhookUrl, mode } = settings;
-
-  onProgress('Запрашиваем данные из Jira через n8n…');
-
-  if (mode === 'custom') {
-    return callWebhook(webhookUrl, { customJql: settings.customJql });
-  }
-
-  return callWebhook(webhookUrl, {
-    project: settings.projectKey,
-  });
-}
-
 export async function fetchThroughputRaw(
   settings: Settings,
   onProgress: (msg: string) => void,
 ): Promise<ThroughputIssueRaw[]> {
-  const { throughputWebhookUrl } = settings;
-  if (!throughputWebhookUrl) throw new Error('throughputWebhookUrl не задан');
   onProgress('Загружаем throughput данные…');
-  const data = await requestWebhookJson<unknown>(throughputWebhookUrl, 'GET');
+  const data = await requestN8nJson<unknown>(settings.n8nBaseUrl, WEBHOOK_PATHS.throughput);
   return getArrayField<unknown>(
     data,
     'data',

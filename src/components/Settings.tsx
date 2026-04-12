@@ -1,4 +1,5 @@
 import type { Settings as SettingsType, JQLMode } from '../types';
+import { buildStandardMetricsJql, getStandardFilterDescription } from '../lib/metricsQuery';
 
 interface Props {
   settings: SettingsType;
@@ -14,6 +15,7 @@ const labelCls = 'block text-xs font-bold text-gray-500 mb-1.5';
 export function Settings({ settings, onChange, onFetch, loading, loadingLabel }: Props) {
   const set = (patch: Partial<SettingsType>) => onChange({ ...settings, ...patch });
   const toggleMode = (mode: JQLMode) => set({ mode });
+  const standardJql = buildStandardMetricsJql(settings.projectKey);
 
   return (
     <div className="bg-white rounded-3xl p-6 mb-6 shadow-donezo border border-gray-100">
@@ -22,54 +24,16 @@ export function Settings({ settings, onChange, onFetch, loading, loadingLabel }:
       </div>
 
       <div className="pb-4 mb-4 border-b border-gray-100">
-        <h3 className="text-sm font-bold text-gray-700 mb-3">Вебхуки</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>Jira Webhook URL</label>
-            <input
-              type="url"
-              className={inputCls}
-              value={settings.webhookUrl}
-              placeholder="Webhook для JIRA данных"
-              onChange={(e) => set({ webhookUrl: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className={labelCls}>Throughput Webhook URL</label>
-            <input
-              type="url"
-              className={inputCls}
-              value={settings.throughputWebhookUrl || ''}
-              placeholder="https://n8n.example.com/webhook/throughput"
-              onChange={(e) => set({ throughputWebhookUrl: e.target.value || undefined })}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="pb-4 mb-4 border-b border-gray-100">
-        <h3 className="text-sm font-bold text-gray-700 mb-3">URL-адреса</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>n8n Base URL</label>
-            <input
-              type="url"
-              className={inputCls}
-              value={settings.n8nBaseUrl || ''}
-              placeholder="https://n8n.example.com"
-              onChange={(e) => set({ n8nBaseUrl: e.target.value || undefined })}
-            />
-          </div>
-          <div>
-            <label className={labelCls}>Jira Base URL (для ссылок на задачи)</label>
-            <input
-              type="url"
-              className={inputCls}
-              value={settings.jiraBaseUrl || ''}
-              placeholder="https://jira.tochka.com/browse"
-              onChange={(e) => set({ jiraBaseUrl: e.target.value || undefined })}
-            />
-          </div>
+        <h3 className="text-sm font-bold text-gray-700 mb-3">Подключение</h3>
+        <div>
+          <label className={labelCls}>n8n URL</label>
+          <input
+            type="url"
+            className={inputCls}
+            value={settings.n8nBaseUrl}
+            placeholder="https://n8n.example.com"
+            onChange={(e) => set({ n8nBaseUrl: e.target.value })}
+          />
         </div>
       </div>
 
@@ -92,25 +56,40 @@ export function Settings({ settings, onChange, onFetch, loading, loadingLabel }:
         </div>
 
         {settings.mode === 'standard' ? (
-          <div className="grid grid-cols-1 md:grid-cols-[120px_auto] gap-3 items-end">
-            <div>
-              <label className={labelCls}>Проект</label>
-              <input
-                type="text"
-                className={inputCls}
-                value={settings.projectKey}
-                placeholder="PROJ"
-                onChange={(e) => set({ projectKey: e.target.value })}
-              />
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-[120px_auto] gap-3 items-end">
+              <div>
+                <label className={labelCls}>Проект</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={settings.projectKey}
+                  placeholder="PROJ"
+                  onChange={(e) => set({ projectKey: e.target.value })}
+                />
+              </div>
+              <div>
+                <button
+                  className="px-6 py-2.5 bg-donezo-dark text-white rounded-full text-sm font-bold shadow-sm cursor-pointer border-none transition-all duration-200 hover:bg-donezo-primary hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none whitespace-nowrap"
+                  onClick={onFetch}
+                  disabled={loading}
+                >
+                  {loading ? loadingLabel : 'Загрузить данные'}
+                </button>
+              </div>
             </div>
-            <div>
-              <button
-                className="px-6 py-2.5 bg-donezo-dark text-white rounded-full text-sm font-bold shadow-sm cursor-pointer border-none transition-all duration-200 hover:bg-donezo-primary hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none whitespace-nowrap"
-                onClick={onFetch}
-                disabled={loading}
-              >
-                {loading ? loadingLabel : 'Загрузить данные'}
-              </button>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+              <div className="text-xs font-semibold text-gray-600">
+                {getStandardFilterDescription()}
+              </div>
+              <details className="mt-2">
+                <summary className="cursor-pointer list-none text-xs font-bold text-donezo-dark">
+                  Показать стандартный JQL
+                </summary>
+                <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words rounded-xl border border-gray-100 bg-white px-3 py-2 text-[11px] leading-relaxed text-gray-600">
+                  {standardJql}
+                </pre>
+              </details>
             </div>
           </div>
         ) : (
