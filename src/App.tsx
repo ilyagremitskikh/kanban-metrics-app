@@ -492,7 +492,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  <MonteCarlo issues={metricsIssues} queuePreset={queuePreset} />
+                  <MonteCarlo issues={metricsIssues} tpWeeks={tpWeeks} ctValues={ctValues} queuePreset={queuePreset} />
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                     <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-auto overflow-hidden">

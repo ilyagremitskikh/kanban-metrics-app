@@ -42,6 +42,7 @@ export interface ThroughputIssueRaw {
 
 export type JQLMode = 'standard' | 'custom';
 export type MCMode = 'items' | 'date' | 'queue';
+export type QueueForecastMode = 'conservative' | 'realistic' | 'agingAware';
 export type SortDir = 'asc' | 'desc';
 export type SortCol = keyof TableRow;
 

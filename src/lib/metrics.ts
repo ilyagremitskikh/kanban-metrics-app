@@ -105,6 +105,11 @@ export function isWipIssue(issue: Issue): boolean {
   );
 }
 
+/** True if issue is currently in downstream delivery WIP. */
+export function isDownstreamWipIssue(issue: Issue): boolean {
+  return BUCKETS.DOWNSTREAM_ACTIVE.includes(issue.currentStatus);
+}
+
 export function buildTableRows(issues: Issue[]): TableRow[] {
   return issues.map((issue) => {
     const m = calculateIssueMetrics(issue);
@@ -124,6 +129,26 @@ export function buildTableRows(issues: Issue[]): TableRow[] {
 
 export function getWipNow(issues: Issue[]): number {
   return issues.filter(isWipIssue).length;
+}
+
+export function getDownstreamWipNow(issues: Issue[]): number {
+  return issues.filter(isDownstreamWipIssue).length;
+}
+
+export function getIssueAgeInActiveBucket(issue: Issue, bucket: 'upstream' | 'downstream', now = new Date()): number {
+  const activeBucketStatuses = bucket === 'upstream'
+    ? BUCKETS.UPSTREAM_ACTIVE
+    : BUCKETS.DOWNSTREAM_ACTIVE;
+
+  const sorted = [...issue.transitions].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  );
+  const firstBucketTransition = sorted.find((t) => activeBucketStatuses.includes(t.to));
+  const startTs = firstBucketTransition
+    ? new Date(firstBucketTransition.date).getTime()
+    : new Date(issue.created).getTime();
+
+  return (now.getTime() - startTs) / MS_IN_DAY;
 }
 
 /** WIP breakdown by status, split into upstream and downstream buckets. */

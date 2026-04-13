@@ -117,21 +117,36 @@ function bugSlaLabel(score: number): string {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-function ChipSelect({ options, value, onChange, disabled, fmt = String }: {
-  options: number[]; value: string; onChange: (v: string) => void;
-  disabled?: boolean; fmt?: (v: number) => string;
+function TableSelect({ options, value, onChange, disabled, placeholder = 'Выбрать…', getLabel = String }: {
+  options: readonly number[]; value: string; onChange: (v: string) => void;
+  disabled?: boolean; placeholder?: string; getLabel?: (v: number) => string;
 }) {
   return (
-    <div className="flex gap-1 flex-wrap">
-      {options.map((opt) => {
-        const s = String(opt);
-        return (
-          <button key={s} disabled={disabled}
-            className={`px-3 py-1.5 border rounded-full text-xs font-bold whitespace-nowrap leading-none transition-all duration-200 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:-translate-y-0.5'} ${value === s ? 'bg-donezo-dark border-donezo-dark text-white shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:border-donezo-primary hover:text-donezo-primary hover:bg-donezo-light'}`}
-            onClick={() => { if (!disabled) onChange(value === s ? '' : s); }}
-          >{fmt(opt)}</button>
-        );
-      })}
+    <div className="relative min-w-0">
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full min-w-0 appearance-none rounded-xl border px-3 py-2 pr-8 text-sm font-semibold outline-none transition-all duration-200 ${
+          disabled
+            ? 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
+            : 'border-gray-100 bg-gray-50 text-slate-900 cursor-pointer focus:border-donezo-primary focus:bg-white focus:ring-2 focus:ring-donezo-light'
+        }`}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((opt) => {
+          const s = String(opt);
+          return <option key={s} value={s}>{getLabel(opt)}</option>;
+        })}
+      </select>
+      <svg
+        className={`pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 ${disabled ? 'text-gray-300' : 'text-gray-400'}`}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
     </div>
   );
 }
@@ -717,7 +732,7 @@ export function RiceSection({
                     </div>
                   )}
                 </th>
-                <th className={`w-64 ${thBase} relative`}>
+                <th className={`w-52 ${thBase} relative`}>
                   <div className="flex items-center gap-1">
                     Impact
                     <button onClick={(e) => { e.stopPropagation(); setActiveTooltip(activeTooltip === 'impact' ? null : 'impact'); }}
@@ -740,7 +755,7 @@ export function RiceSection({
                     </div>
                   )}
                 </th>
-                <th className={`w-48 ${thBase} relative`}>
+                <th className={`w-40 ${thBase} relative`}>
                   <div className="flex items-center gap-1">
                     Confidence
                     <button onClick={(e) => { e.stopPropagation(); setActiveTooltip(activeTooltip === 'confidence' ? null : 'confidence'); }}
@@ -810,10 +825,22 @@ export function RiceSection({
                       />
                     </td>
                     <td className="px-3 py-2.5 align-middle">
-                      <ChipSelect options={IMPACT_OPTIONS} value={row.impact} onChange={(v) => setField(issue.key, 'impact', v)} disabled={saving} fmt={(v) => `${IMPACT_LABELS[String(v)]} (${v})`} />
+                      <TableSelect
+                        options={IMPACT_OPTIONS}
+                        value={row.impact}
+                        onChange={(v) => setField(issue.key, 'impact', v)}
+                        disabled={saving}
+                        getLabel={(v) => `${IMPACT_LABELS[String(v)]} (${v})`}
+                      />
                     </td>
                     <td className="px-3 py-2.5 align-middle">
-                      <ChipSelect options={CONF_OPTIONS} value={row.confidence} onChange={(v) => setField(issue.key, 'confidence', v)} disabled={saving} fmt={(v) => `${v}%`} />
+                      <TableSelect
+                        options={CONF_OPTIONS}
+                        value={row.confidence}
+                        onChange={(v) => setField(issue.key, 'confidence', v)}
+                        disabled={saving}
+                        getLabel={(v) => `${v}%`}
+                      />
                     </td>
                     <td className="px-3 py-2.5 align-middle">
                       <Stepper value={row.effort} onChange={(v) => setField(issue.key, 'effort', v)} disabled={saving} />
@@ -852,19 +879,19 @@ export function RiceSection({
                 </th>
                 <th className={`${thBase}`}>Summary</th>
                 <th className={`w-36 ${thBase}`}>Статус</th>
-                <th className={`w-64 ${thBase}`}>
+                <th className={`w-52 ${thBase}`}>
                   R — Риски
                   <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">Фин./юрид./репутационные</span>
                 </th>
-                <th className={`w-56 ${thBase}`}>
+                <th className={`w-44 ${thBase}`}>
                   P — Процесс
                   <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">Кредитный конвейер</span>
                 </th>
-                <th className={`w-56 ${thBase}`}>
+                <th className={`w-44 ${thBase}`}>
                   S — Масштаб
                   <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">Охват проблемы</span>
                 </th>
-                <th className={`w-56 ${thBase}`}>
+                <th className={`w-44 ${thBase}`}>
                   W — Workaround
                   <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">Обходной путь</span>
                 </th>
@@ -891,24 +918,24 @@ export function RiceSection({
                     <td className="px-3 py-2.5 align-middle text-slate-900 min-w-[200px]">{issue.summary}</td>
                     <td className="px-3 py-2.5 align-middle text-xs text-gray-500 whitespace-nowrap">{issue.status}</td>
                     <td className="px-3 py-2.5 align-middle">
-                      <ChipSelect options={[...BUG_RISK_OPTIONS]} value={row.bug_risk}
+                      <TableSelect options={[...BUG_RISK_OPTIONS]} value={row.bug_risk}
                         onChange={(v) => setBugField(issue.key, 'bug_risk', v)} disabled={saving}
-                        fmt={(v) => BUG_RISK_LABELS[v]} />
+                        getLabel={(v) => BUG_RISK_LABELS[v]} />
                     </td>
                     <td className="px-3 py-2.5 align-middle">
-                      <ChipSelect options={[...BUG_PROCESS_OPTIONS]} value={row.bug_process}
+                      <TableSelect options={[...BUG_PROCESS_OPTIONS]} value={row.bug_process}
                         onChange={(v) => setBugField(issue.key, 'bug_process', v)} disabled={saving}
-                        fmt={(v) => BUG_PROCESS_LABELS[v]} />
+                        getLabel={(v) => BUG_PROCESS_LABELS[v]} />
                     </td>
                     <td className="px-3 py-2.5 align-middle">
-                      <ChipSelect options={[...BUG_SCALE_OPTIONS]} value={row.bug_scale}
+                      <TableSelect options={[...BUG_SCALE_OPTIONS]} value={row.bug_scale}
                         onChange={(v) => setBugField(issue.key, 'bug_scale', v)} disabled={saving}
-                        fmt={(v) => BUG_SCALE_LABELS[v]} />
+                        getLabel={(v) => BUG_SCALE_LABELS[v]} />
                     </td>
                     <td className="px-3 py-2.5 align-middle">
-                      <ChipSelect options={[...BUG_WA_OPTIONS]} value={row.bug_workaround}
+                      <TableSelect options={[...BUG_WA_OPTIONS]} value={row.bug_workaround}
                         onChange={(v) => setBugField(issue.key, 'bug_workaround', v)} disabled={saving}
-                        fmt={(v) => BUG_WA_LABELS[v]} />
+                        getLabel={(v) => BUG_WA_LABELS[v]} />
                     </td>
                     <td className="px-3 py-2.5 text-center align-middle">
                       {score !== null ? (

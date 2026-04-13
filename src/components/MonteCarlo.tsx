@@ -1,14 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
-import { runMCItems, runMCDate, runMCQueue, type MCResult, type QueueItemResult } from '../lib/monteCarlo';
-import { buildThroughputWeeksWithZeros } from '../lib/metrics';
-import { getWipNow } from '../lib/metrics';
-import type { Issue, MCMode } from '../types';
+import {
+  runMCItems,
+  runMCDate,
+  runMCQueue,
+  buildMCSamplesFromWeeks,
+  calculateEffectiveWip,
+  MC_HISTORY_START_DATE,
+  type MCResult,
+  type QueueItemResult,
+} from '../lib/monteCarlo';
+import { getDownstreamWipNow, getIssueAgeInActiveBucket, isDownstreamWipIssue } from '../lib/metrics';
+import { percentile, fmtNum } from '../lib/utils';
+import type { Issue, MCMode, QueueForecastMode, ThroughputWeek } from '../types';
 
 Chart.register(...registerables);
 
 interface Props {
   issues: Issue[];
+  tpWeeks: ThroughputWeek[];
+  ctValues: number[];
   queuePreset?: string[] | null;
 }
 
@@ -18,7 +29,7 @@ const fmtYear  = (d: Date) => d.toLocaleDateString('ru-RU', { year: 'numeric' })
 const MODE_META: Record<MCMode, { label: string; hint: string }> = {
   items: { label: 'N задач → когда?',  hint: 'Введите число задач — получите вероятностные даты завершения' },
   date:  { label: 'К дате → сколько?', hint: 'Выберите дату — узнайте сколько задач успеете закрыть' },
-  queue: { label: 'Очередь',           hint: 'Приоритизированный список: когда будет готова каждая задача?' },
+  queue: { label: 'Очередь',           hint: 'Delivery forecast: когда будут готовы задачи после попадания в очередь разработки?' },
 };
 
 const PCT_STYLES = {
@@ -29,15 +40,21 @@ const PCT_STYLES = {
 
 const inputCls = 'px-4 py-2 border border-gray-100 bg-gray-50 rounded-xl text-sm font-semibold outline-none transition-all duration-200 focus:bg-white focus:border-donezo-primary focus:ring-2 focus:ring-donezo-light';
 const btnPrimary = 'px-6 py-2.5 bg-donezo-dark text-white rounded-full text-sm font-bold cursor-pointer border-none transition-all duration-200 hover:bg-donezo-primary hover:-translate-y-0.5 hover:shadow-lg whitespace-nowrap';
+const QUEUE_MODE_META: Record<QueueForecastMode, { label: string; hint: string }> = {
+  conservative: { label: 'Осторожный', hint: 'Весь downstream WIP полностью блокирует очередь разработки' },
+  realistic: { label: 'Реалистичный', hint: 'Downstream WIP считается частично уже обработанным' },
+  agingAware: { label: 'С учётом возраста', hint: 'Downstream WIP взвешивается по возрасту задач в delivery' },
+};
 
-export function MonteCarlo({ issues, queuePreset }: Props) {
+export function MonteCarlo({ issues, tpWeeks, ctValues, queuePreset }: Props) {
   const presetQueue = queuePreset && queuePreset.length > 0 ? queuePreset : null;
   const [mode, setMode]             = useState<MCMode>(presetQueue ? 'queue' : 'items');
+  const [queueMode, setQueueMode]   = useState<QueueForecastMode>('realistic');
   const [itemCount, setItemCount]   = useState(10);
   const [targetDate, setTargetDate] = useState('');
   const [result, setResult]         = useState<MCResult | null>(null);
   const [queueResult, setQueueResult] = useState<QueueItemResult[] | null>(null);
-  const [wipCount, setWipCount]     = useState(() => getWipNow(issues));
+  const [wipCount, setWipCount]     = useState(() => getDownstreamWipNow(issues));
   const [queueItems, setQueueItems] = useState<string[]>(() => presetQueue ?? ['', '', '']);
   const [error, setError]           = useState('');
 
@@ -49,18 +66,30 @@ export function MonteCarlo({ issues, queuePreset }: Props) {
     setResult(null);
     setQueueResult(null);
     setError('');
-    if (m === 'queue') setWipCount(getWipNow(issues));
+    if (m === 'queue') setWipCount(getDownstreamWipNow(issues));
   };
 
   const getSamples = () => {
-    const samples = buildThroughputWeeksWithZeros(issues);
+    const samples = buildMCSamplesFromWeeks(tpWeeks);
     if (samples.length < 2) {
-      setError('Недостаточно данных (нужно ≥ 2 недель Throughput)');
+      setError(`Недостаточно throughput-данных после ${new Date(MC_HISTORY_START_DATE).toLocaleDateString('ru-RU')}`);
       return null;
     }
     setError('');
     return samples;
   };
+
+  const now = new Date();
+  const downstreamP85 = percentile(ctValues, 85);
+  const wipAging = issues
+    .filter(isDownstreamWipIssue)
+    .map((issue) => ({ age: getIssueAgeInActiveBucket(issue, 'downstream', now) }));
+  const effectiveWip = calculateEffectiveWip({
+    mode: queueMode,
+    wipCount,
+    downstreamP85,
+    wipAging,
+  });
 
   const run = () => {
     const samples = getSamples();
@@ -72,7 +101,7 @@ export function MonteCarlo({ issues, queuePreset }: Props) {
       setResult(runMCDate(samples, new Date(targetDate)));
     } else {
       const named = queueItems.map((s, i) => s.trim() || `Задача ${i + 1}`);
-      setQueueResult(runMCQueue(samples, wipCount, named));
+      setQueueResult(runMCQueue(samples, effectiveWip, named));
     }
   };
 
@@ -218,8 +247,8 @@ export function MonteCarlo({ issues, queuePreset }: Props) {
           {/* Left: input */}
           <div>
             <div className="bg-gray-50 rounded-xl px-4 py-3.5 mb-4">
-              <div className="flex items-center justify-between text-xs font-medium text-gray-500 mb-2.5">
-                <span>Задач в работе прямо сейчас</span>
+              <div className="flex items-center justify-between text-xs font-medium text-gray-500 mb-2">
+                <span>Текущий downstream WIP</span>
                 <span className="bg-slate-900 text-white text-sm font-bold px-2.5 py-0.5 rounded-full min-w-[32px] text-center">{wipCount}</span>
               </div>
               <input
@@ -228,9 +257,40 @@ export function MonteCarlo({ issues, queuePreset }: Props) {
                 className="w-full cursor-pointer accent-blue-500"
               />
               <div className="flex justify-between text-xs text-gray-400 mt-1"><span>0</span><span>20</span></div>
+              <div className="mt-3 flex items-center justify-between text-xs font-medium text-gray-500">
+                <span>Эффективный downstream WIP</span>
+                <span className="rounded-full bg-white px-2.5 py-0.5 text-sm font-bold text-donezo-dark shadow-sm">{fmtNum(effectiveWip)}</span>
+              </div>
             </div>
 
-            <div className="text-xs font-semibold text-gray-500 mb-2">Бэклог — порядок приоритетов</div>
+            <div className="bg-white border border-gray-100 rounded-xl p-3.5 mb-4">
+              <div className="text-xs font-semibold text-gray-500 mb-2">Режим расчёта</div>
+              <div className="flex flex-wrap gap-2">
+                {(['conservative', 'realistic', 'agingAware'] as QueueForecastMode[]).map((value) => (
+                  <button
+                    key={value}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all duration-200 ${
+                      queueMode === value
+                        ? 'bg-donezo-dark text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-500 hover:text-gray-900'
+                    }`}
+                    onClick={() => setQueueMode(value)}
+                  >
+                    {QUEUE_MODE_META[value].label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 text-xs text-gray-400 leading-relaxed">{QUEUE_MODE_META[queueMode].hint}</div>
+            </div>
+
+            <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 mb-4">
+              <div className="text-xs font-semibold text-blue-900">Commitment point: `Готово к разработке`</div>
+              <div className="text-xs text-blue-700 mt-1 leading-relaxed">
+                Этот прогноз считает только delivery-часть потока: задачи уже готовы к входу в разработку и стоят в очереди на downstream.
+              </div>
+            </div>
+
+            <div className="text-xs font-semibold text-gray-500 mb-2">Очередь разработки — порядок приоритетов</div>
             <div className="flex flex-col gap-1.5 mb-2.5 max-h-[240px] overflow-y-auto">
               {queueItems.map((item, idx) => (
                 <div key={idx} className="flex items-center gap-1.5">
@@ -278,7 +338,7 @@ export function MonteCarlo({ issues, queuePreset }: Props) {
                       <th className="text-[10px] font-bold uppercase tracking-wider pb-3 pr-3 text-left border-b-2 border-gray-200 w-8 text-gray-400">#</th>
                       <th className="text-[10px] font-bold uppercase tracking-wider pb-3 pr-3 text-left border-b-2 border-gray-200 text-gray-500">Задача</th>
                       <th className="text-[10px] font-bold uppercase tracking-wider pb-3 pr-3 text-left border-b-2 border-gray-200 text-blue-600">P50</th>
-                      <th className="text-[10px] font-bold uppercase tracking-wider pb-3 pr-3 text-left border-b-2 border-gray-200 text-amber-600">P85</th>
+                      <th className="text-[10px] font-black uppercase tracking-wider pb-3 pr-3 text-left border-b-2 border-amber-300 text-amber-700 bg-amber-50/60">P85</th>
                       <th className="text-[10px] font-bold uppercase tracking-wider pb-3 text-left border-b-2 border-gray-200 text-red-600">P95</th>
                     </tr>
                   </thead>
@@ -288,14 +348,19 @@ export function MonteCarlo({ issues, queuePreset }: Props) {
                         <td className="text-gray-400 text-xs font-bold text-center py-3.5 pr-3 align-middle group-hover:text-donezo-dark transition-colors">{idx + 1}</td>
                         <td className="text-slate-900 font-bold py-3.5 pr-3 align-middle">{row.name}</td>
                         <td className="text-blue-700 font-semibold whitespace-nowrap py-3.5 pr-3 align-middle">{fmtShort(row.p50)}</td>
-                        <td className="text-amber-700 font-semibold whitespace-nowrap py-3.5 pr-3 align-middle">{fmtShort(row.p85)}</td>
+                        <td className="bg-amber-50/60 text-amber-800 font-extrabold whitespace-nowrap py-3.5 pr-3 align-middle">{fmtShort(row.p85)}</td>
                         <td className="text-red-700 font-semibold whitespace-nowrap py-3.5 align-middle">{fmtShort(row.p95)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <div className="text-xs text-gray-400 mt-4">
-                  WIP в расчёте: {wipCount} · Прогноз от {today.toLocaleDateString('ru-RU')}
+                <div className="mt-4 rounded-2xl bg-gray-50 px-4 py-3">
+                  <div className="text-xs font-semibold text-gray-500">
+                    P85 — рабочий срок планирования; P50 — оптимистичный сценарий; P95 — защитный хвост
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    Прогноз начинается после попадания задачи в очередь разработки (`Готово к разработке`) · Downstream WIP: {wipCount} · Эффективный WIP: {fmtNum(effectiveWip)} · История MC от {new Date(MC_HISTORY_START_DATE).toLocaleDateString('ru-RU')} · Прогноз от {today.toLocaleDateString('ru-RU')}
+                  </div>
                 </div>
               </>
             )}

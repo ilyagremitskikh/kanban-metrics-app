@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { percentile, fmtNum } from '../lib/utils';
-import { BUCKETS } from '../lib/metrics';
+import { BUCKETS, getIssueAgeInActiveBucket } from '../lib/metrics';
 import type { Issue } from '../types';
 import { JIRA_BASE_URL } from '../types';
 import { TypeBadge, StatusBadge } from './Badges';
@@ -51,20 +51,12 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
 
     return wipIssues
       .map((i) => {
-        const sorted = [...i.transitions].sort(
-          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-        );
-        // Age = time since first entry into this bucket's active statuses
-        const firstBucketTransition = sorted.find((t) => activeBucketStatuses.includes(t.to));
-        const startTs = firstBucketTransition
-          ? new Date(firstBucketTransition.date).getTime()
-          : new Date(i.created).getTime();
         return {
           key: i.key,
           summary: i.summary,
           type: i.type,
           currentStatus: i.currentStatus,
-          age: (now.getTime() - startTs) / 86_400_000,
+          age: getIssueAgeInActiveBucket(i, bucket, now),
         };
       })
       .sort((a, b) => b.age - a.age)

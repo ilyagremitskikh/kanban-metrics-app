@@ -4,6 +4,8 @@ import {
   buildTableRows,
   buildThroughputWeeks,
   isWipIssue,
+  isDownstreamWipIssue,
+  getDownstreamWipNow,
   BUCKETS,
 } from '../metrics';
 import type { Issue } from '../../types';
@@ -203,6 +205,36 @@ describe('isWipIssue', () => {
   it('task in "Отменена" → not WIP', () => {
     const issue = makeIssue('C-1', '2026-04-01T08:00:00.000Z', 'Отменена', []);
     expect(isWipIssue(issue)).toBe(false);
+  });
+});
+
+describe('isDownstreamWipIssue', () => {
+  it('task in DOWNSTREAM_ACTIVE → is downstream WIP', () => {
+    const issue = makeIssue('DWIP-1', '2026-04-01T08:00:00.000Z', 'Разработка', []);
+    expect(isDownstreamWipIssue(issue)).toBe(true);
+  });
+
+  it('task in UPSTREAM_ACTIVE → is not downstream WIP', () => {
+    const issue = makeIssue('DWIP-2', '2026-04-01T08:00:00.000Z', 'Анализ', []);
+    expect(isDownstreamWipIssue(issue)).toBe(false);
+  });
+
+  it('"Готово к разработке" is not downstream WIP', () => {
+    const issue = makeIssue('DWIP-3', '2026-04-01T08:00:00.000Z', 'Готово к разработке', []);
+    expect(isDownstreamWipIssue(issue)).toBe(false);
+  });
+});
+
+describe('getDownstreamWipNow', () => {
+  it('counts only downstream active issues', () => {
+    const issues = [
+      makeIssue('A', '2026-04-01T00:00:00.000Z', 'Разработка', []),
+      makeIssue('B', '2026-04-01T00:00:00.000Z', 'Code review', []),
+      makeIssue('C', '2026-04-01T00:00:00.000Z', 'Анализ', []),
+      makeIssue('D', '2026-04-01T00:00:00.000Z', 'Готово к разработке', []),
+    ];
+
+    expect(getDownstreamWipNow(issues)).toBe(2);
   });
 });
 

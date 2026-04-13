@@ -1,4 +1,5 @@
 import { percentile } from './utils';
+import type { QueueForecastMode, ThroughputWeek } from '../types';
 
 export interface QueueItemResult {
   name: string;
@@ -7,12 +8,20 @@ export interface QueueItemResult {
   p95: Date;
 }
 
+export interface WipAgingEntry {
+  age: number;
+}
+
 export interface MCResult {
   p50: number;
   p85: number;
   p95: number;
   histogram: { from: number; to: number; count: number; color: string }[];
 }
+
+export const MC_HISTORY_START_DATE = '2026-01-12';
+export const DEFAULT_WIP_RESIDUAL_FACTOR = 0.6;
+export const DEFAULT_AGING_FLOOR = 0.25;
 
 function simulate(samples: number[], N: number, getCount: (s: number[]) => number): number[] {
   const results: number[] = [];
@@ -90,31 +99,71 @@ function buildResult(sortedResults: number[]): MCResult {
   return { p50, p85, p95, histogram: bins };
 }
 
+export function buildMCSamplesFromWeeks(
+  weeks: ThroughputWeek[],
+  historyStartDate = MC_HISTORY_START_DATE,
+): number[] {
+  return weeks
+    .filter((week) => week.date >= historyStartDate)
+    .map((week) => week.count);
+}
+
+export function calculateEffectiveWip(params: {
+  mode: QueueForecastMode;
+  wipCount: number;
+  downstreamP85: number | null;
+  wipAging: WipAgingEntry[];
+  wipResidualFactor?: number;
+  agingFloor?: number;
+}): number {
+  const {
+    mode,
+    wipCount,
+    downstreamP85,
+    wipAging,
+    wipResidualFactor = DEFAULT_WIP_RESIDUAL_FACTOR,
+    agingFloor = DEFAULT_AGING_FLOOR,
+  } = params;
+
+  if (mode === 'conservative') return wipCount;
+  if (mode === 'realistic') return wipCount * wipResidualFactor;
+
+  const threshold = Math.max(1, downstreamP85 ?? 1);
+  const residuals = wipAging.map((issue) => Math.max(agingFloor, 1 - (issue.age / threshold)));
+  if (!residuals.length) return wipCount;
+
+  const total = residuals.reduce((sum, value) => sum + value, 0);
+  const averageResidual = total / residuals.length;
+
+  return averageResidual * wipCount;
+}
+
 /**
  * Queue forecast: simulate when each item in a prioritized backlog will be completed.
- * wipCount = tasks already in progress (they occupy the first positions in the queue).
+ * effectiveWip = current WIP translated into an effective fractional queue position.
  * items = ordered list of backlog task names.
  * Returns a completion date forecast (P50/P85/P95) for each backlog item.
  */
 export function runMCQueue(
   samples: number[],
-  wipCount: number,
+  effectiveWip: number,
   items: string[],
   N = 10_000,
 ): QueueItemResult[] {
-  const totalPositions = wipCount + items.length;
-  // weeksByPosition[i] accumulates "in how many weeks was the (i+1)-th item completed" across simulations
-  const weeksByPosition: number[][] = Array.from({ length: totalPositions }, () => []);
+  const thresholds = items.map((_, idx) => effectiveWip + idx + 1);
+  const weeksByItem: number[][] = Array.from({ length: items.length }, () => []);
 
   for (let i = 0; i < N; i++) {
     let weeks = 0;
     let done = 0;
-    let nextTarget = 1; // 1-indexed position we're waiting to fill
-    while (nextTarget <= totalPositions && weeks <= 520) {
+    let nextTarget = 0;
+
+    while (nextTarget < thresholds.length && weeks <= 520) {
       done += samples[Math.floor(Math.random() * samples.length)];
       weeks++;
-      while (nextTarget <= totalPositions && done >= nextTarget) {
-        weeksByPosition[nextTarget - 1].push(weeks);
+
+      while (nextTarget < thresholds.length && done >= thresholds[nextTarget]) {
+        weeksByItem[nextTarget].push(weeks);
         nextTarget++;
       }
     }
@@ -128,7 +177,7 @@ export function runMCQueue(
   };
 
   return items.map((name, idx) => {
-    const sorted = [...weeksByPosition[wipCount + idx]].sort((a, b) => a - b);
+    const sorted = [...weeksByItem[idx]].sort((a, b) => a - b);
     return {
       name,
       p50: weeksToDate(percentile(sorted, 50)!),
