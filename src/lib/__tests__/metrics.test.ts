@@ -3,6 +3,8 @@ import {
   calculateIssueMetrics,
   buildTableRows,
   buildThroughputWeeks,
+  buildThroughputWeeksFromRaw,
+  getThroughputTotal,
   isWipIssue,
   isDownstreamWipIssue,
   getDownstreamWipNow,
@@ -257,6 +259,7 @@ describe('buildThroughputWeeks', () => {
     ];
     const weeks = buildThroughputWeeks(issues);
     expect(weeks).toHaveLength(1);
+    expect(weeks[0].date).toBe('2026-03-30');
     expect(weeks[0].count).toBe(3);
   });
 
@@ -272,6 +275,12 @@ describe('buildThroughputWeeks', () => {
     const weeks = buildThroughputWeeks(issues);
     // 4 weeks: 2026-03-02, 03-09, 03-16, 03-23
     expect(weeks).toHaveLength(4);
+    expect(weeks.map((week) => week.date)).toEqual([
+      '2026-03-02',
+      '2026-03-09',
+      '2026-03-16',
+      '2026-03-23',
+    ]);
     expect(weeks[0].count).toBe(1);
     expect(weeks[1].count).toBe(0);
     expect(weeks[2].count).toBe(0);
@@ -295,6 +304,57 @@ describe('buildThroughputWeeks', () => {
   it('returns empty array when no completions', () => {
     const issues = [makeIssue('A', '2026-04-01T00:00:00.000Z', 'Разработка', [])];
     expect(buildThroughputWeeks(issues)).toHaveLength(0);
+  });
+});
+
+describe('buildThroughputWeeksFromRaw', () => {
+  it('uses local monday for +0500 resolution dates', () => {
+    const weeks = buildThroughputWeeksFromRaw([
+      {
+        key: 'CREDITS-9056',
+        issueType: 'Ошибка',
+        resolution: 'Разрешен',
+        resolutionDate: '2026-04-09T14:57:09.000+0500',
+        assignee: 'demidenko',
+      },
+      {
+        key: 'CREDITS-8771',
+        issueType: 'Ошибка',
+        resolution: 'Разрешен',
+        resolutionDate: '2026-04-06T10:27:38.000+0500',
+        assignee: 'demidenko',
+      },
+    ]);
+
+    expect(weeks).toHaveLength(1);
+    expect(weeks[0].date).toBe('2026-04-06');
+    expect(weeks[0].count).toBe(2);
+  });
+});
+
+describe('getThroughputTotal', () => {
+  it('sums weekly throughput counts from the throughput dataset', () => {
+    expect(getThroughputTotal([
+      { date: '2026-03-30', count: 4 },
+      { date: '2026-04-06', count: 4 },
+    ])).toBe(8);
+  });
+
+  it('matches the fallback throughput history total', () => {
+    const weeks = buildThroughputWeeks([
+      makeIssue('A', '2026-04-01T00:00:00.000Z', 'Готово', [
+        { to: 'Готово', date: '2026-04-02T10:00:00.000Z' },
+      ]),
+      makeIssue('B', '2026-04-01T00:00:00.000Z', 'Готово', [
+        { to: 'Готово', date: '2026-04-09T10:00:00.000Z' },
+      ]),
+      makeIssue('C', '2026-04-01T00:00:00.000Z', 'Отменена', [
+        { to: 'Отменена', date: '2026-04-10T10:00:00.000Z' },
+      ]),
+    ]);
+
+    expect(weeks.map((week) => week.count)).toEqual([1, 1]);
+    expect(getThroughputTotal(weeks)).toBe(2);
   });
 });
 

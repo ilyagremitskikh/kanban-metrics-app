@@ -15,6 +15,7 @@ import type { WebhookMeta } from './lib/apiClient';
 import { fetchJiraIssues } from './lib/jiraApi';
 import {
   buildTableRows,
+  getThroughputTotal,
   buildThroughputWeeks,
   buildThroughputWeeksFromRaw,
   getWipBuckets,
@@ -340,7 +341,7 @@ export default function App() {
   const tpWeeksFallback = resourceStates.metrics.hasEverLoaded ? buildThroughputWeeks(metricsIssues) : [];
   const tpWeeks = tpWeeksRaw ?? tpWeeksFallback;
   const wipBuckets = resourceStates.metrics.hasEverLoaded ? getWipBuckets(metricsIssues) : { upstream: {}, downstream: {} };
-  const completedTotal = tableRows.filter((r) => r.completedAt !== null).length;
+  const throughputTotal = getThroughputTotal(tpWeeks);
 
   const metricsHint = getResourceHint(resourceStates.metrics);
   const tasksHint = getResourceHint(resourceStates.tasks);
@@ -412,7 +413,7 @@ export default function App() {
                     upstreamValues={upstreamValues}
                     tpWeeks={tpWeeks}
                     wipBuckets={wipBuckets}
-                    completedTotal={completedTotal}
+                    throughputTotal={throughputTotal}
                   />
 
                   <div className="grid grid-cols-1 gap-4 xl:grid-cols-6">

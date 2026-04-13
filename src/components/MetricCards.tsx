@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { mean, percentile, fmtNum } from '../lib/utils';
+import { MC_HISTORY_START_DATE } from '../lib/monteCarlo';
 import type { ThroughputWeek } from '../types';
 import { Badge } from '@/components/ui/badge';
 import { MetricPanel, SectionCard } from '@/components/ui/admin';
@@ -123,11 +124,12 @@ interface Props {
   upstreamValues: number[];
   tpWeeks: ThroughputWeek[];
   wipBuckets: { upstream: Record<string, number>; downstream: Record<string, number> };
-  completedTotal: number;
+  throughputTotal: number;
 }
 
-export function MetricCards({ ltValues, ctValues, upstreamValues, tpWeeks, wipBuckets, completedTotal }: Props) {
+export function MetricCards({ ltValues, ctValues, upstreamValues, tpWeeks, wipBuckets, throughputTotal }: Props) {
   const tpValues = tpWeeks.map((w) => w.count);
+  const throughputStartLabel = new Date(MC_HISTORY_START_DATE).toLocaleDateString('ru-RU');
 
   return (
     <div className="flex flex-col gap-4">
@@ -162,10 +164,11 @@ export function MetricCards({ ltValues, ctValues, upstreamValues, tpWeeks, wipBu
           </CompositeCard>
         </div>
 
-        <MetricPanel title="Скорость завершения (Throughput)" tooltip="Производительность команды: сколько задач завершается за неделю. Стабильный Throughput — признак предсказуемого потока. Используйте для прогнозирования сроков." className="flex flex-col justify-between xl:col-span-2">
+        <MetricPanel title="Скорость завершения (Throughput)" tooltip={`Производительность команды: сколько задач завершается за неделю. График, total и прогноз используют одну throughput-историю с ${throughputStartLabel}.`} className="flex flex-col justify-between xl:col-span-2">
           <div>
             <div className="text-[38px] font-semibold leading-none tracking-tight text-foreground">{fmtNum(mean(tpValues))}</div>
             <div className="mt-1 text-xs text-muted-foreground">среднее задач / нед.</div>
+            <div className="mt-1 text-xs text-muted-foreground">история throughput с {throughputStartLabel}</div>
             {(() => {
               const typeNames = [...new Set(tpWeeks.flatMap((w) => Object.keys(w.byType ?? {})))];
               if (!typeNames.length) return null;
@@ -183,7 +186,7 @@ export function MetricCards({ ltValues, ctValues, upstreamValues, tpWeeks, wipBu
           </div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-auto">
             <MetricStat label="Макс / нед." value={tpValues.length ? Math.max(...tpValues) : '—'} />
-            <MetricStat label="Всего выполнено" value={completedTotal} />
+            <MetricStat label="Всего за период" value={throughputTotal} />
           </div>
         </MetricPanel>
       </div>

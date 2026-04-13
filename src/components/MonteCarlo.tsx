@@ -66,6 +66,7 @@ export function MonteCarlo({ issues, tpWeeks, ctValues, queuePreset }: Props) {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<Chart | null>(null);
+  const historyStartLabel = new Date(MC_HISTORY_START_DATE).toLocaleDateString('ru-RU');
 
   const switchMode = (m: MCMode) => {
     setMode(m);
@@ -78,7 +79,7 @@ export function MonteCarlo({ issues, tpWeeks, ctValues, queuePreset }: Props) {
   const getSamples = () => {
     const samples = buildMCSamplesFromWeeks(tpWeeks);
     if (samples.length < 2) {
-      setError(`Недостаточно throughput-данных после ${new Date(MC_HISTORY_START_DATE).toLocaleDateString('ru-RU')}`);
+      setError(`Недостаточно throughput-данных после ${historyStartLabel}`);
       return null;
     }
     setError('');
@@ -164,7 +165,7 @@ export function MonteCarlo({ issues, tpWeeks, ctValues, queuePreset }: Props) {
     setQueueItems((p) => p.map((x, j) => (j === i ? v : x)));
 
   return (
-    <SectionCard title="Прогнозирование (Monte Carlo)" description={MODE_META[mode].hint} className="rounded-xl">
+    <SectionCard title="Прогнозирование (Monte Carlo)" description={`${MODE_META[mode].hint} История throughput с ${historyStartLabel}.`} className="rounded-xl">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <ToggleGroup
           type="single"
@@ -362,7 +363,7 @@ export function MonteCarlo({ issues, tpWeeks, ctValues, queuePreset }: Props) {
                     P85 — рабочий срок планирования; P50 — оптимистичный сценарий; P95 — защитный хвост
                   </div>
                   <div className="text-xs text-gray-400 mt-1">
-                    Прогноз начинается после попадания задачи в очередь разработки (`Готово к разработке`) · Downstream WIP: {wipCount} · Эффективный WIP: {fmtNum(effectiveWip)} · История MC от {new Date(MC_HISTORY_START_DATE).toLocaleDateString('ru-RU')} · Прогноз от {today.toLocaleDateString('ru-RU')}
+                    Прогноз начинается после попадания задачи в очередь разработки (`Готово к разработке`) · Downstream WIP: {wipCount} · Эффективный WIP: {fmtNum(effectiveWip)} · История MC от {historyStartLabel} · Прогноз от {today.toLocaleDateString('ru-RU')}
                   </div>
                 </div>
               </>

@@ -1,5 +1,5 @@
 import type { Issue, TableRow, ThroughputWeek, ThroughputIssueRaw } from '../types';
-import { toMonday } from './utils';
+import { formatLocalDate, toMonday } from './utils';
 
 const MS_IN_DAY = 1000 * 60 * 60 * 24;
 
@@ -180,7 +180,7 @@ export function buildThroughputWeeks(issues: Issue[]): ThroughputWeek[] {
     const doneTransitions = sorted.filter((t) => t.to === SUCCESS_DONE_STATUS);
     if (!doneTransitions.length) continue;
     const doneDtm = new Date(doneTransitions[doneTransitions.length - 1].date).getTime();
-    const key = toMonday(new Date(doneDtm)).toISOString().slice(0, 10);
+    const key = formatLocalDate(toMonday(new Date(doneDtm)));
     map.set(key, (map.get(key) || 0) + 1);
   }
   if (map.size === 0) return [];
@@ -190,7 +190,7 @@ export function buildThroughputWeeks(issues: Issue[]): ThroughputWeek[] {
   const cur = new Date(keys[0]);
   const last = new Date(keys[keys.length - 1]);
   while (cur <= last) {
-    const k = cur.toISOString().slice(0, 10);
+    const k = formatLocalDate(cur);
     result.push({ date: k, count: map.get(k) ?? 0 });
     cur.setDate(cur.getDate() + 7);
   }
@@ -209,7 +209,7 @@ export function buildThroughputWeeksFromRaw(
     if (!rd) continue;
     const typeName = item.issueType?.trim() ? item.issueType.trim() : 'Неизвестный тип';
     const assigneeName = item.assignee?.trim() ? item.assignee.trim() : 'Не назначен';
-    const monday = toMonday(new Date(rd)).toISOString().slice(0, 10);
+    const monday = formatLocalDate(toMonday(new Date(rd)));
     if (!weekMap.has(monday)) weekMap.set(monday, { total: 0, byType: {}, byAssignee: {} });
     const entry = weekMap.get(monday)!;
     entry.total += 1;
@@ -222,7 +222,7 @@ export function buildThroughputWeeksFromRaw(
   const cur = new Date(keys[0]);
   const last = new Date(keys[keys.length - 1]);
   while (cur <= last) {
-    const k = cur.toISOString().slice(0, 10);
+    const k = formatLocalDate(cur);
     const entry = weekMap.get(k);
     result.push({
       date: k,
@@ -233,6 +233,10 @@ export function buildThroughputWeeksFromRaw(
     cur.setDate(cur.getDate() + 7);
   }
   return result;
+}
+
+export function getThroughputTotal(weeks: ThroughputWeek[]): number {
+  return weeks.reduce((sum, week) => sum + week.count, 0);
 }
 
 export function buildThroughputWeeksWithZeros(issues: Issue[]): number[] {
