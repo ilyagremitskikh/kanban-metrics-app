@@ -14,8 +14,26 @@ export interface JiraIssuesResponse {
   meta: WebhookMeta | null;
 }
 
-export async function fetchJiraIssues(n8nBaseUrl: string): Promise<JiraIssuesResponse> {
-  const data = await requestN8nJson<unknown>(n8nBaseUrl, WEBHOOK_PATHS.jiraIssues);
+interface FetchJiraIssuesOptions {
+  forceRefresh?: boolean;
+}
+
+function buildJiraIssuesPath({ forceRefresh = false }: FetchJiraIssuesOptions = {}): string {
+  if (!forceRefresh) return WEBHOOK_PATHS.jiraIssues;
+
+  const params = new URLSearchParams({
+    refresh: '1',
+    _ts: String(Date.now()),
+  });
+
+  return `${WEBHOOK_PATHS.jiraIssues}?${params.toString()}`;
+}
+
+export async function fetchJiraIssues(
+  n8nBaseUrl: string,
+  options: FetchJiraIssuesOptions = {},
+): Promise<JiraIssuesResponse> {
+  const data = await requestN8nJson<unknown>(n8nBaseUrl, buildJiraIssuesPath(options));
   return {
     issues: getArrayField<unknown>(data, 'issues', 'Неожиданный формат ответа Jira issues webhook')
       .map((issue) => normalizeJiraIssue(issue as Parameters<typeof normalizeJiraIssue>[0])),

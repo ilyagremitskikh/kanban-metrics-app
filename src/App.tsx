@@ -37,7 +37,7 @@ const METRICS_TTL_MS = 10 * 60 * 1000;
 const TASKS_TTL_MS = 5 * 60 * 1000;
 
 type AppTab = 'metrics' | 'tasks' | 'settings';
-type TasksMode = 'edit' | 'score-tasks' | 'score-tickets';
+type TasksMode = 'edit' | 'priorities';
 type StatusType = 'hidden' | 'info' | 'error' | 'success';
 type ResourceKey = 'metrics' | 'tasks';
 type ResourceStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -310,14 +310,11 @@ export default function App() {
     }
     const current = resourceStates.tasks;
     if (!force && current.hasEverLoaded && !isExpired(current)) return;
-    if (riceDirty && !allowDirty) {
-      failLoad('tasks', 'Сначала сохраните оценки, потом обновите данные из Jira.');
-      return;
-    }
+    if (riceDirty && !allowDirty) return;
 
     beginLoad('tasks');
     try {
-      const loaded = await fetchJiraIssues(settings.n8nBaseUrl);
+      const loaded = await fetchJiraIssues(settings.n8nBaseUrl, { forceRefresh: force });
       setJiraIssues(loaded.issues);
       setRiceIssues(loaded.issues.map(mapJiraIssueToRiceIssue));
       completeLoad('tasks', TASKS_TTL_MS, loaded.meta);

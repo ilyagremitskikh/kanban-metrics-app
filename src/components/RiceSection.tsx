@@ -717,7 +717,7 @@ export function RiceSection({
   ], [tdScores, dirtyKeys, saving, tdSortDir]);
 
   const ALL_SUB_TABS: { id: ScoringTab; label: string; scored: number; total: number }[] = [
-    { id: 'rice',     label: 'Задачи RICE', scored: scoredRice,  total: riceIssues.length },
+    { id: 'rice',     label: 'Задачи',      scored: scoredRice,  total: riceIssues.length },
     { id: 'bugs',     label: 'Баги',        scored: scoredBugs,  total: bugIssues.length  },
     { id: 'techdebt', label: 'Техдолг',     scored: scoredTd,    total: tdIssues.length   },
   ];
@@ -731,9 +731,9 @@ export function RiceSection({
   }[scoringTab];
 
   const currentTabTitle = {
-    rice:     'RICE Приоритизация',
-    bugs:     'FinTech: Defect Scoring Model',
-    techdebt: 'Impact / Effort Matrix',
+    rice:     'Задачи: RICE приоритизация',
+    bugs:     'Баги: FinTech Defect Scoring Model',
+    techdebt: 'Техдолг: Impact / Effort Matrix',
   }[scoringTab];
 
   // ── Current tab has items ─────────────────────────────────────────────────
@@ -970,10 +970,6 @@ export function RiceSection({
         <Alert variant={msg.ok ? 'success' : 'destructive'} className="mb-4"><AlertDescription>{msg.text}</AlertDescription></Alert>
       )}
 
-      {!msg && refreshBlocked && (
-        <Alert variant="default" className="mb-4 border-amber-200 bg-amber-50 text-amber-800"><AlertDescription>{refreshBlockedReason}</AlertDescription></Alert>
-      )}
-
       {/* ── Empty states ─────────────────────────────────────────────────── */}
       {issues.length === 0 && !loading && (
         <EmptyState
@@ -1042,8 +1038,8 @@ export function RiceSection({
 
   return (
     <SectionCard
-      title="Scoring"
-      description="Единая панель приоритизации для RICE, багов и техдолга."
+      title="Приоритеты"
+      description="Единая панель приоритизации для задач, багов и техдолга."
       className="rounded-2xl"
     >
       {content}

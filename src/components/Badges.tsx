@@ -1,19 +1,91 @@
 import type { JSX, ReactNode } from 'react';
 import { ChevronsUp, ChevronUp, Minus, ChevronDown, ChevronsDown, MinusCircle, Equal } from 'lucide-react';
-import { getTypeBadgeClasses } from '../lib/issueTypes';
 import { normalizePriority } from '../lib/priorities';
 
+type TypeTone = {
+  cls: string;
+  icon: JSX.Element;
+};
+
+function normalizeIssueType(type: string): string {
+  return type.trim().toLowerCase();
+}
+
+function getTypeTone(type: string): TypeTone {
+  const normalized = normalizeIssueType(type);
+
+  if (normalized === 'ошибка' || normalized === 'bug') {
+    return {
+      cls: 'border-red-200 bg-red-50 text-red-700',
+      icon: (
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="mr-1 h-3.5 w-3.5">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9V7a4 4 0 118 0v2m-9 0h10l-1 8H8l-1-8Zm3 4h.01M14 13h.01" />
+        </svg>
+      ),
+    };
+  }
+
+  if (normalized === 'техдолг' || normalized === 'tech debt') {
+    return {
+      cls: 'border-amber-200 bg-amber-50 text-amber-700',
+      icon: (
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="mr-1 h-3.5 w-3.5">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.5 6.5a4.5 4.5 0 01-6.36 6.36L4 17l3 3 4.14-4.14a4.5 4.5 0 006.36-6.36L14.5 6.5Z" />
+        </svg>
+      ),
+    };
+  }
+
+  if (normalized === 'user story') {
+    return {
+      cls: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+      icon: (
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="mr-1 h-3.5 w-3.5">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m6-6H6m2-6h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2Z" />
+        </svg>
+      ),
+    };
+  }
+
+  if (normalized === 'задача' || normalized === 'task') {
+    return {
+      cls: 'border-sky-200 bg-sky-50 text-sky-700',
+      icon: (
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="mr-1 h-3.5 w-3.5">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h10M9 12h10M9 17h10M5 7h.01M5 12h.01M5 17h.01" />
+        </svg>
+      ),
+    };
+  }
+
+  if (normalized === 'sub-task' || normalized === 'подзадача' || normalized === 'business sub-task') {
+    return {
+      cls: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+      icon: (
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="mr-1 h-3.5 w-3.5">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h10M7 12h6m-6 5h10M4 7h.01M4 12h.01M4 17h.01" />
+        </svg>
+      ),
+    };
+  }
+
+  return {
+    cls: 'border-slate-200 bg-slate-50 text-slate-700',
+    icon: (
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="mr-1 h-3.5 w-3.5">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V9l-4-4H9Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6" />
+      </svg>
+    ),
+  };
+}
+
 export function TypeBadge({ type }: { type: string }): JSX.Element {
-  const color = getTypeBadgeClasses(type);
-  const icon = (
-    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-3.5 h-3.5 mr-1">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-    </svg>
-  );
+  const tone = getTypeTone(type);
 
   return (
-    <div className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${color.bg} ${color.text} ${color.border} max-w-fit`} title={type}>
-      {icon}
+    <div className={`inline-flex max-w-fit items-center rounded-md border px-2 py-0.5 text-[10px] font-bold ${tone.cls}`} title={type}>
+      {tone.icon}
       <span>{type}</span>
     </div>
   );

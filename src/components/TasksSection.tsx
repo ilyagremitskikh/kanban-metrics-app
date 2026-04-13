@@ -4,27 +4,22 @@ import IssuesTab from './IssuesTab';
 import { RiceSection } from './RiceSection';
 import type { JiraIssueShort, RiceIssue } from '../types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SectionCard, StatusHint } from '@/components/ui/admin';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
-type TasksMode = 'edit' | 'score-tasks' | 'score-tickets';
+type TasksMode = 'edit' | 'priorities';
 
 const MODE_COPY: Record<TasksMode, { label: string; description: string }> = {
   edit: {
     label: 'Редактирование',
-    description: 'Список, создание и редактирование Jira-задач с видимыми score-метками.',
+    description: 'Единая таблица всех Jira-тикетов с типами, приоритетами и score-метками.',
   },
-  'score-tasks': {
-    label: 'Оценка задач',
-    description: 'RICE-оценка для User Story и задач в одном рабочем режиме.',
-  },
-  'score-tickets': {
-    label: 'Оценка тикетов',
-    description: 'Приоритизация багов и техдолга без отдельной вкладки Scoring.',
+  priorities: {
+    label: 'Приоритеты',
+    description: 'Единая панель приоритизации для задач, багов и техдолга.',
   },
 };
 
@@ -33,7 +28,6 @@ function TasksSkeleton() {
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         <Skeleton className="h-8 w-28" />
-        <Skeleton className="h-8 w-24" />
         <Skeleton className="h-8 w-32" />
       </div>
       <div className="rounded-2xl border border-border bg-card p-4">
@@ -105,7 +99,6 @@ export function TasksSection({
       action={(
         <div className="flex flex-wrap items-center justify-end gap-2">
           {lastUpdatedText ? <StatusHint>{lastUpdatedText}</StatusHint> : null}
-          {refreshBlocked ? <Badge variant="warning">Есть несохранённые оценки</Badge> : null}
           <Button
             onClick={handleRefresh}
             disabled={loading || refreshBlocked}
@@ -146,12 +139,6 @@ export function TasksSection({
           </Alert>
         ) : null}
 
-        {refreshBlocked ? (
-          <Alert variant="info" className="border-amber-200 bg-amber-50 text-amber-800">
-            <AlertDescription>{refreshBlockedReason}</AlertDescription>
-          </Alert>
-        ) : null}
-
         {loading && !hasLoadedData ? <TasksSkeleton /> : null}
 
         {(!loading || hasLoadedData) && mode === 'edit' ? (
@@ -167,7 +154,7 @@ export function TasksSection({
           />
         ) : null}
 
-        {(!loading || hasLoadedData) && mode === 'score-tasks' ? (
+        {(!loading || hasLoadedData) && mode === 'priorities' ? (
           <RiceSection
             n8nBaseUrl={n8nBaseUrl}
             issues={scoringIssues}
@@ -184,28 +171,7 @@ export function TasksSection({
             onSaved={onScoringSaved ?? onRefresh}
             embedded
             defaultTab="rice"
-            allowedTabs={['rice']}
-          />
-        ) : null}
-
-        {(!loading || hasLoadedData) && mode === 'score-tickets' ? (
-          <RiceSection
-            n8nBaseUrl={n8nBaseUrl}
-            issues={scoringIssues}
-            loading={loading}
-            refreshing={refreshing}
-            error={error}
-            lastUpdatedText={null}
-            onRefreshFromJira={onRefresh}
-            refreshBlocked={refreshBlocked}
-            refreshBlockedReason={refreshBlockedReason}
-            onSendToQueue={onSendToQueue}
-            onSwitchToMetrics={onSwitchToMetrics}
-            onDirtyChange={onDirtyChange}
-            onSaved={onScoringSaved ?? onRefresh}
-            embedded
-            defaultTab="bugs"
-            allowedTabs={['bugs', 'techdebt']}
+            allowedTabs={['rice', 'bugs', 'techdebt']}
           />
         ) : null}
       </div>
