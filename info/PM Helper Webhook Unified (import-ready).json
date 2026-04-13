@@ -248,7 +248,7 @@
         -100
       ],
       "parameters": {
-        "jsCode": "return $input.all().map(({ json }) => ({\n  json: {\n    key: json.key ?? 'Неизвестно',\n    summary: json.fields?.summary ?? json.summary,\n    description: json.fields?.description ?? json.description,\n    status: json.fields?.status?.name ?? json.status,\n    priority: json.fields?.priority?.name ?? json.priority,\n    issuetype: json.fields?.issuetype?.name ?? json.issuetype,\n    score: json.rice_score ?? json.bug_score ?? json.td_roi ?? null,\n  },\n}));"
+        "jsCode": "return $input.all().map(({ json }) => ({\n  json: {\n    key: json.key ?? 'Неизвестно',\n    summary: json.fields?.summary ?? json.summary,\n    description: json.fields?.description ?? json.description,\n    status: json.fields?.status?.name ?? json.status,\n    priority: json.fields?.priority?.name ?? json.priority,\n    issuetype: json.fields?.issuetype?.name ?? json.issuetype ?? json.issue_type,\n    reach: json.reach ?? null,\n    impact: json.impact ?? null,\n    confidence: json.confidence ?? null,\n    effort: json.effort ?? null,\n    rice_score: json.rice_score ?? null,\n    bug_risk: json.bug_risk ?? null,\n    bug_process: json.bug_process ?? null,\n    bug_scale: json.bug_scale ?? null,\n    bug_workaround: json.bug_workaround ?? null,\n    bug_score: json.bug_score ?? null,\n    td_impact: json.td_impact ?? null,\n    td_effort: json.td_effort ?? null,\n    td_roi: json.td_roi ?? null,\n    score: json.rice_score ?? json.bug_score ?? json.td_roi ?? null,\n  },\n}));"
       }
     },
     {

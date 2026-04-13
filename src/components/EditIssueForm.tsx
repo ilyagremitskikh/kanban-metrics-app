@@ -1,11 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
-import { Loader2, Save, Paperclip, MessageSquare } from 'lucide-react';
+import { Loader2, Save, Paperclip } from 'lucide-react';
 import { fetchJiraIssueDetail, updateJiraIssue } from '../lib/jiraApi';
 import type { JiraIssueDetailed, ChecklistItem, UpdateIssueRequest } from '../types';
 import { normalizePriority } from '../lib/priorities';
 import AiSummaryInput from './AiSummaryInput';
 import AiDescriptionDiff from './AiDescriptionDiff';
+import { FormSection, type IssueFormLayoutMode } from './IssueFormLayout';
 import { PrioritySelect, LabelsInput, ChecklistEditor } from './IssueFormFields';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface Props {
   n8nBaseUrl: string;
@@ -13,6 +18,7 @@ interface Props {
   issueKey: string;
   onUpdated: () => void;
   onClose: () => void;
+  layout?: IssueFormLayoutMode;
 }
 
 function formatDate(iso: string) {
@@ -21,7 +27,7 @@ function formatDate(iso: string) {
   });
 }
 
-export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, onUpdated, onClose }: Props) {
+export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, onUpdated, onClose, layout = 'sheet' }: Props) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const initial = useRef<JiraIssueDetailed | null>(null);
@@ -114,8 +120,8 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-400">
-        <Loader2 size={28} className="animate-spin text-donezo-primary" />
+      <div className="flex h-64 flex-col items-center justify-center gap-3 text-gray-400">
+        <Loader2 size={28} className="animate-spin text-blue-600" />
         <span className="text-sm">Загружаем данные задачи...</span>
       </div>
     );
@@ -123,14 +129,11 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
 
   if (loadError) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3 text-red-400">
+      <div className="flex h-64 flex-col items-center justify-center gap-3 text-red-400">
         <p className="text-sm">{loadError}</p>
-        <button
-          onClick={onClose}
-          className="px-4 py-2 bg-gray-100 text-gray-600 rounded-full text-sm hover:bg-gray-200 transition-colors"
-        >
+        <Button onClick={onClose} variant="secondary">
           Закрыть
-        </button>
+        </Button>
       </div>
     );
   }
@@ -139,82 +142,77 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
   const fallbackIssueType = initial.current?.issuetype ?? availableTypes[0] ?? '';
 
   return (
-    <form onSubmit={handleSave} className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto px-8 py-6 flex flex-col gap-6">
-
-        {/* Issue key badge */}
-        <div className="flex items-center gap-2">
-          <span className="px-3 py-1 bg-donezo-light text-donezo-dark text-xs font-bold rounded-full">
-            {issueKey}
-          </span>
+    <form onSubmit={handleSave} className={cn('flex flex-col', layout === 'page' ? 'min-h-[70vh]' : 'h-full')}>
+      <div className={cn('flex flex-1 flex-col gap-4 overflow-y-auto', layout === 'page' ? 'px-0 py-1' : 'px-6 py-5')}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge>{issueKey}</Badge>
+          <Badge variant="outline">{fallbackIssueType}</Badge>
           {isDirty && (
-            <span className="px-2.5 py-1 bg-amber-50 text-amber-600 text-xs font-medium rounded-full border border-amber-200">
+            <Badge variant="warning">
               {dirtyCount} изм.
-            </span>
+            </Badge>
           )}
         </div>
 
-        {/* Editable fields */}
-        <AiSummaryInput
-          value={summary}
-          onChange={setSummary}
-          n8nBaseUrl={n8nBaseUrl}
-          context={{ issue_type: fallbackIssueType, summary, description, comments: comments.length ? comments : undefined }}
-        />
+        <FormSection title="Основные поля">
+          <div className="space-y-4">
+            <AiSummaryInput
+              value={summary}
+              onChange={setSummary}
+              n8nBaseUrl={n8nBaseUrl}
+              context={{ issue_type: fallbackIssueType, summary, description, comments: comments.length ? comments : undefined }}
+            />
 
-        <AiDescriptionDiff
-          value={description}
-          onChange={setDescription}
-          n8nBaseUrl={n8nBaseUrl}
-          context={{ issue_type: fallbackIssueType, summary, description, comments: comments.length ? comments : undefined }}
-        />
+            <AiDescriptionDiff
+              value={description}
+              onChange={setDescription}
+              n8nBaseUrl={n8nBaseUrl}
+              context={{ issue_type: fallbackIssueType, summary, description, comments: comments.length ? comments : undefined }}
+            />
 
-        <PrioritySelect value={priority} onChange={setPriority} />
-        <LabelsInput value={labels} onChange={setLabels} />
-        <ChecklistEditor
-          value={checklists}
-          onChange={setChecklists}
-          n8nBaseUrl={n8nBaseUrl}
-          context={{
-            issue_type: fallbackIssueType,
-            summary,
-            description,
-          }}
-        />
-
-        {/* Comments */}
-        {comments.length > 0 && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-widest">
-              <MessageSquare size={13} />
-              Комментарии ({comments.length})
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <PrioritySelect value={priority} onChange={setPriority} />
+              <LabelsInput value={labels} onChange={setLabels} />
             </div>
+          </div>
+        </FormSection>
+
+        <FormSection title="Чеклист">
+          <ChecklistEditor
+            value={checklists}
+            onChange={setChecklists}
+            n8nBaseUrl={n8nBaseUrl}
+            context={{
+              issue_type: fallbackIssueType,
+              summary,
+              description,
+            }}
+          />
+        </FormSection>
+
+        {comments.length > 0 && (
+          <FormSection title={`Комментарии (${comments.length})`}>
             <div className="flex flex-col gap-3">
               {comments.map((c, i) => (
-                <div key={i} className="bg-gray-50 rounded-2xl p-4">
+                <div key={i} className="rounded-lg border border-border bg-muted/25 p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-semibold text-donezo-dark">{c.author}</span>
+                    <span className="text-xs font-semibold text-slate-900">{c.author}</span>
                     <span className="text-xs text-gray-400">{formatDate(c.created)}</span>
                   </div>
                   <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.body}</p>
                 </div>
               ))}
             </div>
-          </div>
+          </FormSection>
         )}
 
-        {/* Attachments */}
         {attachments.length > 0 && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-widest">
-              <Paperclip size={13} />
-              Вложения ({attachments.length})
-            </div>
+          <FormSection title={`Вложения (${attachments.length})`}>
             <div className="flex flex-wrap gap-2">
               {attachments.map((a, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs text-gray-600"
+                  className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/25 px-3 py-2 text-xs text-gray-600"
                 >
                   <Paperclip size={12} className="text-gray-400" />
                   {a.filename}
@@ -222,35 +220,30 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
                 </div>
               ))}
             </div>
-          </div>
+          </FormSection>
         )}
       </div>
 
-      {/* Sticky footer */}
-      <div className="flex-shrink-0 px-8 py-5 border-t border-gray-100 bg-white">
-        {submitError && <p className="text-xs text-red-500 mb-3">{submitError}</p>}
-        {submitSuccess && <p className="text-xs text-emerald-600 mb-3">Изменения сохранены!</p>}
+      <div className={cn('flex-shrink-0 border-t border-border bg-background', layout === 'page' ? 'sticky bottom-0 px-0 py-4' : 'px-6 py-4')}>
+        {submitError && <Alert variant="destructive" className="mb-3"><AlertDescription>{submitError}</AlertDescription></Alert>}
+        {submitSuccess && <Alert variant="success" className="mb-3"><AlertDescription>Изменения сохранены!</AlertDescription></Alert>}
         <div className="flex items-center gap-3">
-          <button
+          <Button
             type="submit"
             disabled={submitting || !isDirty}
-            className="flex items-center gap-2 px-6 py-3 bg-donezo-dark text-white font-semibold text-sm
-              rounded-full hover:bg-donezo-primary hover:-translate-y-0.5 transition-all duration-200
-              shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
           >
             {submitting
               ? <><Loader2 size={15} className="animate-spin" /> Сохранение...</>
               : <><Save size={15} /> Сохранить изменения{dirtyCount > 0 ? ` (${dirtyCount})` : ''}</>
             }
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={onClose}
-            className="px-5 py-3 bg-white text-gray-600 text-sm font-medium border border-gray-200
-              rounded-full hover:bg-donezo-light hover:text-donezo-dark transition-all duration-200"
+            variant="secondary"
           >
-            Закрыть
-          </button>
+            {layout === 'page' ? 'Назад к списку' : 'Закрыть'}
+          </Button>
         </div>
       </div>
     </form>

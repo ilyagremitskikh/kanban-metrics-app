@@ -6,6 +6,11 @@ import {
 import type { ChecklistItem } from '../types';
 import { aiChecklist } from '../lib/jiraApi';
 import { normalizePriority } from '../lib/priorities';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 // ── PrioritySelect (custom dropdown with icons) ───────────────────────────────
 
@@ -94,51 +99,49 @@ export function PrioritySelect({ value, onChange, disabled }: PrioritySelectProp
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
-        Приоритет
-      </label>
+      <Label className="mb-2 block">Приоритет</Label>
       <div ref={ref} className="relative">
-        {/* Trigger */}
-        <button
+        <Button
           type="button"
           disabled={disabled}
           onClick={() => setOpen(o => !o)}
-          className={`w-full flex items-center gap-2 px-4 py-3 bg-gray-50 border rounded-xl text-sm
-            text-left transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed
+          variant="secondary"
+          className={`h-10 w-full justify-start gap-2 rounded-xl border bg-background px-3 text-left text-sm shadow-none transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed
             ${open
-              ? 'border-donezo-primary ring-2 ring-donezo-light bg-white'
-              : 'border-gray-100 hover:border-gray-200'
+              ? 'border-blue-600 ring-2 ring-blue-100 bg-white'
+              : 'border-input hover:border-slate-300'
             }`}
         >
-          <span className={`flex items-center justify-center w-6 h-6 rounded-full ${current.colorCls}`}>
+          <span className={`flex h-6 w-6 items-center justify-center rounded-full ${current.colorCls}`}>
             {current.icon}
           </span>
-          <span className="flex-1 font-medium text-gray-800">{current.label}</span>
+          <span className="flex-1 font-medium text-slate-800">{current.label}</span>
           <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-        </button>
+        </Button>
 
-        {/* Dropdown */}
         {open && (
-          <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border border-gray-100 rounded-2xl shadow-donezo overflow-hidden">
+          <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-border bg-background shadow-lg">
             {PRIORITY_OPTIONS.map(opt => (
-              <button
+              <Button
                 key={opt.value}
                 type="button"
                 onClick={() => { onChange(opt.value); setOpen(false); }}
-                className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left
-                  hover:bg-donezo-light transition-colors duration-150
-                  ${opt.value === normalizedValue ? 'bg-donezo-light/60' : ''}`}
+                variant="ghost"
+                className={cn(
+                  'h-auto w-full justify-start rounded-none px-4 py-2.5 text-sm transition-colors duration-150 hover:bg-blue-50',
+                  opt.value === normalizedValue ? 'bg-blue-50' : '',
+                )}
               >
-                <span className={`flex items-center justify-center w-6 h-6 rounded-full ${opt.colorCls}`}>
+                <span className={`flex h-6 w-6 items-center justify-center rounded-full ${opt.colorCls}`}>
                   {opt.icon}
                 </span>
-                <span className={`font-medium ${opt.value === normalizedValue ? 'text-donezo-dark' : 'text-gray-700'}`}>
+                <span className={`font-medium ${opt.value === normalizedValue ? 'text-slate-900' : 'text-gray-700'}`}>
                   {opt.label}
                 </span>
                 {opt.value === normalizedValue && (
-                  <Check size={13} className="ml-auto text-donezo-primary" />
+                  <Check size={13} className="ml-auto text-blue-600" />
                 )}
-              </button>
+              </Button>
             ))}
           </div>
         )}
@@ -160,15 +163,13 @@ export function IssueTypeSelect({ value, availableTypes, onChange, disabled }: I
   const options = availableTypes.length ? availableTypes : [value];
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
-        Тип задачи
-      </label>
+      <Label className="mb-2 block">Тип задачи</Label>
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
         disabled={disabled}
-        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm
-          focus:bg-white focus:border-donezo-primary focus:ring-2 focus:ring-donezo-light
+        className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm
+          focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100
           focus:outline-none transition-all duration-200 cursor-pointer disabled:opacity-60"
       >
         {options.map(t => (
@@ -210,33 +211,30 @@ export function LabelsInput({ value, onChange }: LabelsInputProps) {
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
-        Метки (Labels)
-      </label>
-      <div className="flex flex-wrap gap-1.5 p-3 bg-gray-50 border border-gray-100 rounded-xl min-h-[46px] transition-all duration-200 focus-within:bg-white focus-within:border-donezo-primary focus-within:ring-2 focus-within:ring-donezo-light">
+      <Label className="mb-2 block">Метки (Labels)</Label>
+      <div className="flex min-h-[46px] flex-wrap gap-1.5 rounded-xl border border-input bg-background p-3 transition-all duration-200 focus-within:border-blue-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100">
         {value.map(label => (
-          <span
-            key={label}
-            className="flex items-center gap-1 px-2.5 py-1 bg-donezo-light text-donezo-dark text-xs font-medium rounded-full"
-          >
+          <Badge key={label} variant="secondary" className="rounded-full px-2.5 py-1 text-xs font-medium text-slate-700">
             {label}
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => removeLabel(label)}
-              className="hover:text-red-500 transition-colors"
+              className="size-4 hover:text-red-500"
             >
               <X size={11} />
-            </button>
-          </span>
+            </Button>
+          </Badge>
         ))}
-        <input
+        <Input
           type="text"
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={addLabel}
           placeholder={value.length === 0 ? 'Введите метку и нажмите Enter' : ''}
-          className="flex-1 min-w-[120px] bg-transparent text-sm outline-none placeholder:text-gray-400"
+          className="min-w-[120px] flex-1 border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0"
         />
       </div>
     </div>
@@ -309,25 +307,23 @@ export function ChecklistEditor({ value, onChange, n8nBaseUrl, context }: Checkl
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Header */}
       <div className="flex items-center justify-between">
-        <label className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
-          Чеклист
-        </label>
+        <Label>Чеклист</Label>
         {canGenerateAi && (
-          <button
+          <Button
             type="button"
             onClick={handleAiGenerate}
             disabled={aiLoading}
-            className="flex items-center gap-1.5 text-xs font-medium text-donezo-primary hover:text-donezo-dark
-              transition-colors duration-200 disabled:opacity-50"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-blue-600 hover:text-slate-900"
             title={context?.summary ? '' : 'Заполните заголовок задачи для генерации'}
           >
             {aiLoading
               ? <><Loader2 size={12} className="animate-spin" /> Генерирую...</>
               : <><Sparkles size={12} /> Сгенерировать с ИИ</>
             }
-          </button>
+          </Button>
         )}
       </div>
 
@@ -336,52 +332,53 @@ export function ChecklistEditor({ value, onChange, n8nBaseUrl, context }: Checkl
       {value.length > 0 && (
         <div className="flex flex-col gap-2">
           {value.map((item, i) => (
-            <div key={i} className="flex items-center gap-2">
+            <div key={i} className="flex items-center gap-2 rounded-xl border border-border bg-background p-2">
               <input
                 type="checkbox"
                 checked={item.checked}
                 onChange={e => updateItem(i, { checked: e.target.checked })}
-                className="w-4 h-4 rounded accent-donezo-primary flex-shrink-0"
+                className="w-4 h-4 rounded accent-blue-600 flex-shrink-0"
               />
-              <input
+              <Input
                 type="text"
                 value={item.name}
                 onChange={e => updateItem(i, { name: e.target.value })}
                 placeholder="Пункт чеклиста"
-                className="flex-1 px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm
-                  focus:bg-white focus:border-donezo-primary focus:ring-2 focus:ring-donezo-light
-                  focus:outline-none transition-all duration-200"
+                className="flex-1"
               />
-              <label className="flex items-center gap-1 text-xs text-gray-500 flex-shrink-0 cursor-pointer">
+              <label className="flex shrink-0 items-center gap-1 text-xs text-gray-500 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={item.mandatory}
                   onChange={e => updateItem(i, { mandatory: e.target.checked })}
-                  className="w-3.5 h-3.5 rounded accent-donezo-primary"
+                  className="w-3.5 h-3.5 rounded accent-blue-600"
                 />
                 Обяз.
               </label>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() => removeItem(i)}
-                className="text-gray-400 hover:text-red-500 transition-colors duration-200 flex-shrink-0"
+                className="size-8 shrink-0 text-gray-400 hover:text-red-500"
               >
                 <Trash2 size={15} />
-              </button>
+              </Button>
             </div>
           ))}
         </div>
       )}
 
-      <button
+      <Button
         type="button"
         onClick={addItem}
-        className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-donezo-primary
-          transition-colors duration-200 self-start"
+        variant="ghost"
+        size="sm"
+        className="self-start px-0 text-xs text-gray-500 hover:text-blue-600"
       >
         <Plus size={14} />
         Добавить пункт
-      </button>
+      </Button>
     </div>
   );
 }

@@ -1,3 +1,10 @@
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+export function cn(...inputs: ClassValue[]): string {
+  return twMerge(clsx(inputs));
+}
+
 export function mean(arr: number[]): number | null {
   return arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
 }

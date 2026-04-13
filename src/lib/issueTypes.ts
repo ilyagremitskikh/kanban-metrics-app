@@ -1,5 +1,5 @@
 const PALETTE = [
-  '#10b981',
+  '#2563eb',
   '#ef4444',
   '#f59e0b',
   '#3b82f6',
@@ -14,15 +14,15 @@ const PALETTE = [
 ] as const;
 
 const BADGE_CLASSES = [
-  { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100' },
+  { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-100' },
   { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-100' },
   { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-100' },
-  { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-100' },
+  { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-100' },
   { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-100' },
   { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-100' },
-  { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-100' },
-  { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-100' },
   { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-100' },
+  { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-100' },
+  { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' },
   { bg: 'bg-lime-50', text: 'text-lime-700', border: 'border-lime-100' },
   { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-100' },
   { bg: 'bg-fuchsia-50', text: 'text-fuchsia-700', border: 'border-fuchsia-100' },

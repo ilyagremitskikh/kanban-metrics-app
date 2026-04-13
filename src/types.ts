@@ -108,6 +108,16 @@ export interface JiraIssueShort {
   rice_score?: number | null;
   bug_score?: number | null;
   td_roi?: number | null;
+  reach?: number | null;
+  impact?: number | null;
+  confidence?: number | null;
+  effort?: number | null;
+  bug_risk?: number | null;
+  bug_process?: number | null;
+  bug_scale?: number | null;
+  bug_workaround?: number | null;
+  td_impact?: number | null;
+  td_effort?: number | null;
   description?: string;
   project?: string;
   assignee?: string;

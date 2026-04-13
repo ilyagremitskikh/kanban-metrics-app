@@ -1,12 +1,20 @@
 import type { ReactNode } from 'react';
 import { mean, percentile, fmtNum } from '../lib/utils';
 import type { ThroughputWeek } from '../types';
+import { Badge } from '@/components/ui/badge';
+import { MetricPanel, SectionCard } from '@/components/ui/admin';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
-function Tooltip({ text }: { text: string }) {
+function MetricTooltip({ text }: { text: string }) {
   return (
-    <span className="metric-tooltip">
-      ℹ<span className="tooltip-text">{text}</span>
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button type="button" className="inline-flex size-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground">
+          ℹ
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{text}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -18,10 +26,15 @@ interface MetricStatProps {
 function MetricStat({ label, value }: MetricStatProps) {
   return (
     <div>
-      <div className="text-xs text-gray-400 mb-0.5">{label}</div>
-      <div className="text-sm font-bold text-gray-700">{value}</div>
+      <div className="mb-0.5 text-[11px] uppercase text-muted-foreground">{label}</div>
+      <div className="text-sm font-semibold text-foreground">{value}</div>
     </div>
   );
+}
+
+function formatDays(value: number | null) {
+  if (value === null) return '—';
+  return `${fmtNum(value)} дн.`;
 }
 
 interface TimeSliceProps {
@@ -32,18 +45,18 @@ interface TimeSliceProps {
 
 function TimeSlice({ title, tooltip, values }: TimeSliceProps) {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4">
-      <div className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-        {title} <Tooltip text={tooltip} />
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/20 p-4">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase text-muted-foreground">
+        {title} <MetricTooltip text={tooltip} />
       </div>
       <div>
-        <div className="text-[30px] font-extrabold text-donezo-dark leading-none tracking-tight">{fmtNum(mean(values))}</div>
-        <div className="text-xs text-gray-400 mt-1">среднее, дней</div>
+        <div className="text-[30px] font-semibold leading-none tracking-tight text-foreground">{fmtNum(mean(values))}</div>
+        <div className="mt-1 text-xs text-muted-foreground">среднее, дн.</div>
       </div>
       <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-        <MetricStat label="Медиана (P50)" value={`${fmtNum(percentile(values, 50))} d.`} />
-        <MetricStat label="P85" value={`${fmtNum(percentile(values, 85))} d.`} />
-        <MetricStat label="P95" value={`${fmtNum(percentile(values, 95))} d.`} />
+        <MetricStat label="Медиана (P50)" value={formatDays(percentile(values, 50))} />
+        <MetricStat label="P85" value={formatDays(percentile(values, 85))} />
+        <MetricStat label="P95" value={formatDays(percentile(values, 95))} />
         <MetricStat label="Выполнено" value={values.length} />
       </div>
     </div>
@@ -62,13 +75,13 @@ function WipSlice({ title, tooltip, statusCounts, badgeClass, badgeTextClass }: 
   const total = Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
 
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4">
-      <div className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-        {title} <Tooltip text={tooltip} />
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/20 p-4">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase text-muted-foreground">
+        {title} <MetricTooltip text={tooltip} />
       </div>
       <div>
-        <div className="text-[30px] font-extrabold text-donezo-dark leading-none tracking-tight">{total}</div>
-        <div className="text-xs text-gray-400 mt-1">задач в работе</div>
+        <div className="text-[30px] font-semibold leading-none tracking-tight text-foreground">{total}</div>
+        <div className="mt-1 text-xs text-muted-foreground">задач в работе</div>
       </div>
       {total > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-auto">
@@ -77,10 +90,10 @@ function WipSlice({ title, tooltip, statusCounts, badgeClass, badgeTextClass }: 
             .map(([status, count]) => (
               <span
                 key={status}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${badgeClass}`}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold ${badgeClass}`}
               >
                 <span className={`font-bold ${badgeTextClass}`}>{count}</span>
-                <span className="text-gray-600 truncate max-w-[120px]">{status}</span>
+                <span className="max-w-[120px] truncate text-slate-600">{status}</span>
               </span>
             ))}
         </div>
@@ -96,14 +109,11 @@ interface CompositeCardProps {
 
 function CompositeCard({ title, children }: CompositeCardProps) {
   return (
-    <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100">
-      <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
-        {title}
-      </div>
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+    <SectionCard title={title}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {children}
       </div>
-    </div>
+    </SectionCard>
   );
 }
 
@@ -120,54 +130,51 @@ export function MetricCards({ ltValues, ctValues, upstreamValues, tpWeeks, wipBu
   const tpValues = tpWeeks.map((w) => w.count);
 
   return (
-    <div className="flex flex-col gap-4 mb-5">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100">
-          <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
-            Lead Time <Tooltip text="Полное время жизни задачи: от создания до перехода в «Готово». Включает ожидание в очереди. Отражает скорость доставки ценности с точки зрения клиента." />
-          </div>
-          <div className="text-[38px] font-extrabold text-donezo-dark leading-none tracking-tight">{fmtNum(mean(ltValues))}</div>
-          <div className="text-xs text-gray-400 mt-1 mb-3.5">среднее, дней</div>
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-6">
+        <MetricPanel
+          title="Время доставки (Lead Time)"
+          tooltip="Полное время жизни задачи: от создания до перехода в «Готово». Включает ожидание в очереди. Отражает скорость доставки ценности с точки зрения клиента."
+          className="xl:col-span-2"
+        >
+          <div className="text-[38px] font-semibold leading-none tracking-tight text-foreground">{fmtNum(mean(ltValues))}</div>
+          <div className="mb-3.5 mt-1 text-xs text-muted-foreground">среднее, дн.</div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-            <MetricStat label="Медиана (P50)" value={`${fmtNum(percentile(ltValues, 50))} d.`} />
-            <MetricStat label="P85" value={`${fmtNum(percentile(ltValues, 85))} d.`} />
-            <MetricStat label="P95" value={`${fmtNum(percentile(ltValues, 95))} d.`} />
+            <MetricStat label="Медиана (P50)" value={formatDays(percentile(ltValues, 50))} />
+            <MetricStat label="P85" value={formatDays(percentile(ltValues, 85))} />
+            <MetricStat label="P95" value={formatDays(percentile(ltValues, 95))} />
             <MetricStat label="Выполнено" value={ltValues.length} />
           </div>
+        </MetricPanel>
+
+        <div className="xl:col-span-2">
+          <CompositeCard title="Время в потоке (Cycle Time)">
+            <TimeSlice
+              title="Время разработки (Downstream CT)"
+              tooltip="Время разработки: от первого входа в Downstream (Разработка и далее) до «Готово». Не включает аналитику и ожидание в очереди."
+              values={ctValues}
+            />
+            <TimeSlice
+              title="Время подготовки (Upstream CT)"
+              tooltip="Время аналитики/подготовки: от первого входа в Upstream (Анализ и подготовка) до начала разработки. Отражает эффективность Discovery-процесса."
+              values={upstreamValues}
+            />
+          </CompositeCard>
         </div>
 
-        <CompositeCard title="Cycle Time">
-          <TimeSlice
-            title="Downstream CT"
-            tooltip="Время разработки: от первого входа в Downstream (Разработка и далее) до «Готово». Не включает аналитику и ожидание в очереди."
-            values={ctValues}
-          />
-          <TimeSlice
-            title="Upstream CT"
-            tooltip="Время аналитики/подготовки: от первого входа в Upstream (Анализ и подготовка) до начала разработки. Отражает эффективность Discovery-процесса."
-            values={upstreamValues}
-          />
-        </CompositeCard>
-
-        <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col justify-between">
+        <MetricPanel title="Скорость завершения (Throughput)" tooltip="Производительность команды: сколько задач завершается за неделю. Стабильный Throughput — признак предсказуемого потока. Используйте для прогнозирования сроков." className="flex flex-col justify-between xl:col-span-2">
           <div>
-            <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
-              Throughput{' '}
-              <Tooltip text="Производительность команды: сколько задач завершается за неделю. Стабильный Throughput — признак предсказуемого потока. Используйте для прогнозирования сроков." />
-            </div>
-            <div className="text-[38px] font-extrabold text-donezo-dark leading-none tracking-tight">{fmtNum(mean(tpValues))}</div>
-            <div className="text-xs text-gray-400 mt-1">среднее задач / нед.</div>
+            <div className="text-[38px] font-semibold leading-none tracking-tight text-foreground">{fmtNum(mean(tpValues))}</div>
+            <div className="mt-1 text-xs text-muted-foreground">среднее задач / нед.</div>
             {(() => {
               const typeNames = [...new Set(tpWeeks.flatMap((w) => Object.keys(w.byType ?? {})))];
               if (!typeNames.length) return null;
               return (
-                <div className="mt-1.5 mb-2 space-y-0.5">
+                <div className="mb-2 mt-1.5 flex flex-wrap gap-1.5">
                   {typeNames.map((name) => {
                     const avg = tpWeeks.reduce((sum, week) => sum + (week.byType?.[name] ?? 0), 0) / (tpWeeks.length || 1);
                     return (
-                      <div key={name} className="text-xs text-gray-400">
-                        {name}: {avg.toFixed(1)} / нед.
-                      </div>
+                      <Badge key={name} variant="outline">{name}: {avg.toFixed(1)} / нед.</Badge>
                     );
                   })}
                 </div>
@@ -178,23 +185,23 @@ export function MetricCards({ ltValues, ctValues, upstreamValues, tpWeeks, wipBu
             <MetricStat label="Макс / нед." value={tpValues.length ? Math.max(...tpValues) : '—'} />
             <MetricStat label="Всего выполнено" value={completedTotal} />
           </div>
-        </div>
+        </MetricPanel>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        <CompositeCard title="WIP">
+        <CompositeCard title="Работа в процессе (WIP)">
           <WipSlice
-            title="Upstream"
+            title="Подготовка (Upstream)"
             tooltip="Задачи в стадии аналитики, подготовки и Discovery. Статусы: Готово к анализу, Анализ, Готово к разработке и др."
             statusCounts={wipBuckets.upstream}
-            badgeClass="bg-amber-50 border border-amber-100"
+            badgeClass="border border-amber-100 bg-amber-50"
             badgeTextClass="text-amber-700"
           />
           <WipSlice
-            title="Downstream"
+            title="Разработка (Downstream)"
             tooltip="Задачи в стадии разработки, тестирования и релиза. Статусы: Разработка, Code review, Тестирование и др."
             statusCounts={wipBuckets.downstream}
-            badgeClass="bg-blue-50 border border-blue-100"
+            badgeClass="border border-blue-100 bg-blue-50"
             badgeTextClass="text-blue-700"
           />
         </CompositeCard>

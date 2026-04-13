@@ -7,12 +7,22 @@ export interface RiceIssuesResponse {
   meta: WebhookMeta | null;
 }
 
+function dedupeRiceIssues(issues: RiceIssue[]): RiceIssue[] {
+  const byKey = new Map<string, RiceIssue>();
+  for (const issue of issues) {
+    byKey.set(issue.key, issue);
+  }
+  return Array.from(byKey.values());
+}
+
 async function parseRiceIssues(
   data: unknown,
 ): Promise<RiceIssuesResponse> {
   return {
-    issues: getArrayField<unknown>(data, 'issues', 'Неожиданный формат ответа rice-scoring webhook')
-      .map((issue) => normalizeRiceIssue(issue as Parameters<typeof normalizeRiceIssue>[0])),
+    issues: dedupeRiceIssues(
+      getArrayField<unknown>(data, 'issues', 'Неожиданный формат ответа rice-scoring webhook')
+        .map((issue) => normalizeRiceIssue(issue as Parameters<typeof normalizeRiceIssue>[0])),
+    ),
     meta: getOptionalMeta(data),
   };
 }

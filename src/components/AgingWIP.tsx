@@ -5,6 +5,8 @@ import { BUCKETS, getIssueAgeInActiveBucket } from '../lib/metrics';
 import type { Issue } from '../types';
 import { JIRA_BASE_URL } from '../types';
 import { TypeBadge, StatusBadge } from './Badges';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 Chart.register(...registerables);
 
@@ -25,7 +27,7 @@ interface Props {
 function deltaLabel(age: number, p: number | null): string {
   if (p === null) return '—';
   const d = age - p;
-  return (d >= 0 ? '+' : '') + fmtNum(d) + 'd.';
+  return (d >= 0 ? '+' : '') + fmtNum(d) + ' дн.';
 }
 
 function deltaClass(age: number, p: number | null): string {
@@ -61,7 +63,7 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
       })
       .sort((a, b) => b.age - a.age)
       .slice(0, 40);
-  }, [issues, activeBucketStatuses]);
+  }, [issues, activeBucketStatuses, bucket]);
 
   useEffect(() => {
     if (!canvasRef.current || !aged.length) return;
@@ -77,7 +79,7 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
     canvasRef.current.style.height = h + 'px';
     canvasRef.current.height = h;
 
-    const metricLabel = bucket === 'upstream' ? 'Upstream' : 'Dev CT';
+    const metricLabel = bucket === 'upstream' ? 'Время подготовки' : 'Время разработки';
 
     chartRef.current = new Chart(canvasRef.current, {
       type: 'bar',
@@ -85,7 +87,7 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
         labels: aged.map((i) => i.key),
         datasets: [
           {
-            label: 'Days in progress',
+            label: 'Дней в работе',
             data: aged.map((i) => i.age),
             backgroundColor: barColors,
             borderWidth: 0,
@@ -94,7 +96,7 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
           ...(p50 !== null
             ? [{
                 type: 'line' as const,
-                label: `${metricLabel} P50 (${fmtNum(p50)}d.)`,
+                label: `${metricLabel} P50 (${fmtNum(p50)} дн.)`,
                 data: aged.map(() => p50),
                 borderColor: '#6b7280',
                 borderWidth: 1.5,
@@ -106,7 +108,7 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
           ...(p85 !== null
             ? [{
                 type: 'line' as const,
-                label: `${metricLabel} P85 (${fmtNum(p85)}d.)`,
+                label: `${metricLabel} P85 (${fmtNum(p85)} дн.)`,
                 data: aged.map(() => p85),
                 borderColor: '#f59e0b',
                 borderWidth: 1.5,
@@ -128,7 +130,7 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
               title: (items) => aged[items[0].dataIndex]?.key,
               label: (item) =>
                 item.datasetIndex === 0
-                  ? `${fmtNum(item.parsed.x)} d. — ${aged[item.dataIndex]?.summary?.slice(0, 60)}`
+                  ? `${fmtNum(item.parsed.x)} дн. — ${aged[item.dataIndex]?.summary?.slice(0, 60)}`
                   : (item.dataset.label ?? ''),
             },
           },
@@ -136,7 +138,7 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
         scales: {
           x: {
             min: 0,
-            title: { display: true, text: 'Days in progress', font: { size: 11 } },
+            title: { display: true, text: 'Дни в работе', font: { size: 11 } },
             grid: { color: '#f3f4f6' },
           },
           y: { ticks: { font: { size: 11 } }, grid: { display: false } },
@@ -147,7 +149,7 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
 
   useEffect(() => () => { chartRef.current?.destroy(); }, []);
 
-  if (!aged.length) return <div className="text-gray-400 py-4 text-sm">Нет задач в работе</div>;
+  if (!aged.length) return <div className="py-4 text-sm text-gray-400">Нет задач в работе</div>;
 
   return (
     <div>
@@ -155,58 +157,55 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
         <canvas ref={canvasRef} />
       </div>
 
-      <button
-        className="mt-4 bg-transparent border border-gray-100 rounded-full px-5 py-2 text-xs font-bold text-gray-500 cursor-pointer transition-all duration-200 hover:bg-donezo-light hover:text-donezo-dark hover:border-donezo-primary hover:-translate-y-0.5 shadow-sm"
-        onClick={() => setShowTable((v) => !v)}
-      >
+      <Button variant="secondary" size="sm" className="mt-4" onClick={() => setShowTable((v) => !v)}>
         {showTable ? '▲ Скрыть детали' : `▼ Детали WIP (${aged.length} задач)`}
-      </button>
+      </Button>
 
       {showTable && (
-        <div className="mt-3 overflow-x-auto rounded-3xl border border-gray-100 shadow-none p-2">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                {['Задача', 'Тип', 'Текущий статус', 'Дней в работе', 'vs P50', 'vs P85'].map((h) => (
-                  <th key={h} className="px-3 py-3.5 text-left text-xs font-bold uppercase tracking-widest text-gray-400 border-b-2 border-gray-100 bg-gray-50/50 whitespace-nowrap">
+        <div className="mt-3 overflow-x-auto rounded-lg border border-border p-2">
+          <Table className="border-collapse">
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                {['Задача', 'Тип', 'Текущий статус', 'Дни в работе', 'vs P50', 'vs P85'].map((h) => (
+                  <TableHead key={h} className="whitespace-nowrap">
                     {h}
-                  </th>
+                  </TableHead>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {aged.map((i) => {
                 const color =
                   p50 !== null && i.age <= p50 ? 'green'
                   : p85 !== null && i.age <= p85 ? 'yellow'
                   : 'red';
                 return (
-                  <tr key={i.key} className={`border-b border-gray-50 last:border-none hover:bg-donezo-light/30 transition-colors duration-200 group wip-row-${color}`}>
-                    <td className="px-3 py-3.5 align-top">
+                  <TableRow key={i.key} className={`group wip-row-${color}`}>
+                    <TableCell className="align-top">
                       <a
                         href={`${JIRA_BASE_URL}/${i.key}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-mono font-bold text-donezo-dark hover:text-donezo-primary hover:underline transition-colors mr-2 whitespace-nowrap"
+                        className="mr-2 whitespace-nowrap font-mono font-bold text-slate-900 transition-colors hover:text-blue-700 hover:underline"
                       >
                         {i.key}
                       </a>
-                      <span className="text-gray-500 group-hover:text-donezo-dark transition-colors">{i.summary}</span>
-                    </td>
-                    <td className="px-3 py-3.5 whitespace-nowrap">
+                      <span className="text-gray-500 transition-colors group-hover:text-slate-900">{i.summary}</span>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <TypeBadge type={i.type} />
-                    </td>
-                    <td className="px-3 py-3.5 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <StatusBadge status={i.currentStatus} />
-                    </td>
-                    <td className="px-3 py-3.5 font-bold whitespace-nowrap group-hover:text-donezo-dark transition-colors">{fmtNum(i.age)}d.</td>
-                    <td className={`px-3 py-3.5 whitespace-nowrap ${deltaClass(i.age, p50)} group-hover:text-donezo-dark transition-colors`}>{deltaLabel(i.age, p50)}</td>
-                    <td className={`px-3 py-3.5 whitespace-nowrap ${deltaClass(i.age, p85)} group-hover:text-donezo-dark transition-colors`}>{deltaLabel(i.age, p85)}</td>
-                  </tr>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap font-bold transition-colors group-hover:text-slate-900">{fmtNum(i.age)} дн.</TableCell>
+                    <TableCell className={`whitespace-nowrap ${deltaClass(i.age, p50)} transition-colors group-hover:text-slate-900`}>{deltaLabel(i.age, p50)}</TableCell>
+                    <TableCell className={`whitespace-nowrap ${deltaClass(i.age, p85)} transition-colors group-hover:text-slate-900`}>{deltaLabel(i.age, p85)}</TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>

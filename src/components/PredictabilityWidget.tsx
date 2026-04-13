@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import { Chart, registerables } from 'chart.js';
 import type { PredictabilityResult } from '../lib/metrics';
 import { fmtWeekLabel } from '../lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 
 Chart.register(...registerables);
 
@@ -128,16 +130,13 @@ function TrendBadge({ history }: { history: PredictabilityResult['history'] }) {
   const curr = history[history.length - 1].score;
   const diff = curr - prev;
   if (Math.abs(diff) < 1) {
-    return <span className="text-xs font-semibold text-gray-400 ml-2">→ стабильно</span>;
+    return <Badge variant="outline">стабильно</Badge>;
   }
   const up = diff > 0;
   return (
-    <span
-      className="text-xs font-bold ml-2"
-      style={{ color: up ? '#16a34a' : '#dc2626' }}
-    >
+    <Badge variant={up ? 'success' : 'destructive'}>
       {up ? '▲' : '▼'} {Math.abs(diff)}%
-    </span>
+    </Badge>
   );
 }
 
@@ -146,10 +145,10 @@ function TrendBadge({ history }: { history: PredictabilityResult['history'] }) {
 export function PredictabilityWidget({ data }: Props) {
   if (!data) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center py-10 text-gray-400">
-        <div className="text-4xl mb-3 opacity-30">📉</div>
+      <div className="flex h-full flex-col items-center justify-center py-10 text-center text-muted-foreground">
+        <div className="mb-3 text-4xl opacity-30">📉</div>
         <p className="text-sm">Недостаточно данных</p>
-        <p className="text-xs mt-1 text-gray-300">Нужно ≥ 2 завершённых задачи с Cycle Time</p>
+        <p className="mt-1 text-xs text-slate-300">Нужно ≥ 2 завершённых задачи с Cycle Time</p>
       </div>
     );
   }
@@ -159,88 +158,78 @@ export function PredictabilityWidget({ data }: Props) {
 
   return (
     <div className="flex flex-col h-full gap-3">
-
-      {/* ── Top row: big score + stats ── */}
       <div className="flex items-start gap-4">
-
-        {/* Score pill */}
         <div
-          className="flex flex-col items-center justify-center rounded-2xl px-5 py-3 shrink-0"
+          className="flex shrink-0 flex-col items-center justify-center rounded-xl px-4 py-3"
           style={{ background: scoreBg, border: `2px solid ${scoreRing}` }}
         >
           <div className="flex items-end leading-none gap-1">
-            <span className="text-4xl font-extrabold tabular-nums" style={{ color: scoreTextColor }}>
+            <span className="text-4xl font-semibold tabular-nums" style={{ color: scoreTextColor }}>
               {score}
             </span>
-            <span className="text-xl font-bold mb-0.5" style={{ color: scoreTextColor }}>%</span>
+            <span className="mb-0.5 text-xl font-semibold" style={{ color: scoreTextColor }}>%</span>
           </div>
-          <span className="text-[10px] font-semibold uppercase tracking-wider mt-1" style={{ color: scoreTextColor }}>
+          <span className="mt-1 text-[10px] font-semibold uppercase tracking-wider" style={{ color: scoreTextColor }}>
             {scoreLabel(score)}
           </span>
         </div>
 
-        {/* Stats column */}
-        <div className="flex flex-col gap-1.5 text-xs text-gray-600 min-w-0">
-
-          {/* Trend */}
+        <div className="min-w-0 flex flex-col gap-1.5 text-xs text-slate-600">
           <div className="flex items-center">
-            <span className="text-gray-400 mr-1">Тренд</span>
+            <span className="mr-2 text-muted-foreground">Тренд</span>
             <TrendBadge history={history} />
           </div>
 
-          {/* SLE Hit Rate */}
           <div className="flex items-center gap-1.5">
-            <span className="text-gray-400">SLE Hit Rate</span>
+            <span className="text-muted-foreground">SLE Hit Rate</span>
             <span
-              className="font-bold tabular-nums"
+              className="font-semibold tabular-nums"
               style={{ color: sleHitRate >= 80 ? '#16a34a' : sleHitRate >= 60 ? '#d97706' : '#dc2626' }}
             >
               {sleHitRate}%
             </span>
-            <span className="text-gray-300 text-[10px]">(P85)</span>
+            <span className="text-[10px] text-slate-300">(P85)</span>
           </div>
 
-          {/* Mean CT */}
           <div className="flex items-center gap-1.5">
-            <span className="text-gray-400">Средний CT</span>
+            <span className="text-muted-foreground">Средний CT</span>
             <span className="font-semibold tabular-nums">{meanCT}д</span>
           </div>
 
-          {/* StdDev + CV */}
           <div className="flex items-center gap-1.5">
-            <span className="text-gray-400">StdDev</span>
+            <span className="text-muted-foreground">StdDev</span>
             <span className="font-semibold tabular-nums">{stdDev}д</span>
-            <span className="text-gray-300">·</span>
-            <span className="text-gray-400">CV</span>
+            <span className="text-slate-300">·</span>
+            <span className="text-muted-foreground">CV</span>
             <span className="font-semibold tabular-nums">{cv}</span>
           </div>
 
-          {/* Sample size */}
-          <div className="text-gray-300 text-[10px]">
+          <div className="text-[10px] text-slate-300">
             выборка: {n} задач · окно 12 нед.
           </div>
         </div>
 
-        {/* Tooltip / info */}
         <div className="ml-auto shrink-0">
-          <div className="metric-tooltip text-gray-400">
-            ℹ
-            <span className="tooltip-text" style={{ width: '220px' }}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" className="inline-flex size-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:bg-muted hover:text-foreground">
+                ℹ
+              </button>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-[220px]">
               <strong>Формула:</strong> Score = max(0, 100 − CV × 25)<br />
               CV = σ(CT) / μ(CT)<br /><br />
               Скользящее окно: 12 недель.<br />
               <strong>SLE Hit Rate</strong> — % задач завершившихся ≤ P85.<br />
               70% — benchmark зрелой команды.
-            </span>
-          </div>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
-      {/* ── Sparkline ── */}
       <div className="flex-1 min-h-0">
         <Sparkline history={history} color={scoreTextColor} />
       </div>
-
     </div>
   );
 }

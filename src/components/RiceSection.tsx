@@ -1,7 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import { saveRiceScores, type RiceUpdate } from '../lib/riceApi';
 import type { RiceIssue } from '../types';
-import { JIRA_BASE_URL } from '../types';
+import {
+  IssueKeyCell,
+  StatusCell,
+  SummaryCell,
+  TaskScoreBadge,
+  TaskScoreLabelBadge,
+  type TaskScoreTone,
+} from './TaskTableCells';
+import { TasksDataTable, TasksDataTableSortHeader } from './TasksDataTable';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { EmptyState, SectionCard, StatusHint } from '@/components/ui/admin';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const IMPACT_OPTIONS = [0.25, 0.5, 1, 2, 3];
@@ -24,6 +41,7 @@ const BUG_RISK_LABELS:    Record<number, string> = { 40: 'Фин. риск / З�
 const BUG_PROCESS_LABELS: Record<number, string> = { 30: 'Блокирует выдачу', 10: 'Частичный сбой', 2: 'Косметика' };
 const BUG_SCALE_LABELS:   Record<number, string> = { 15: 'Все клиенты', 8: 'Сегмент / Редко', 2: 'Единичные случаи' };
 const BUG_WA_LABELS:      Record<number, string> = { 15: 'Нет пути / Нужны технари', 7: 'Ручная поддержка', 1: 'Клиент сам обойдёт' };
+const EMPTY_SELECT_VALUE = '__empty';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ScoreRow { reach: string; impact: string; confidence: string; effort: string }
@@ -57,13 +75,13 @@ function calcTdRoi(row: TdRow): number | null {
   return Math.round((i / e) * 100) / 100;
 }
 
-function tdQuadrant(impact: string, effort: string): { label: string; cls: string; order: number } | null {
+function tdQuadrant(impact: string, effort: string): { label: string; tone: TaskScoreTone; order: number } | null {
   const i = parseFloat(impact), e = parseFloat(effort);
   if (isNaN(i) || isNaN(e)) return null;
-  if (i > 5 && e <= 5) return { label: 'Быстрая победа', cls: 'bg-emerald-100 text-emerald-700', order: 1 };
-  if (i > 5 && e > 5)  return { label: 'Крупный проект', cls: 'bg-blue-100 text-blue-700',       order: 2 };
-  if (i <= 5 && e <= 5) return { label: 'Фоновая задача', cls: 'bg-amber-50 text-amber-700',      order: 3 };
-  return { label: 'Трата времени', cls: 'bg-red-100 text-red-700', order: 4 };
+  if (i > 5 && e <= 5) return { label: 'Быстрая победа', tone: 'primary', order: 1 };
+  if (i > 5 && e > 5)  return { label: 'Крупный проект', tone: 'primary', order: 2 };
+  if (i <= 5 && e <= 5) return { label: 'Фоновая задача', tone: 'warning', order: 3 };
+  return { label: 'Трата времени', tone: 'danger', order: 4 };
 }
 
 // ── Row initialisers ──────────────────────────────────────────────────────────
@@ -93,20 +111,20 @@ function initTdRow(issue: RiceIssue): TdRow {
 }
 
 // ── Badge colours ─────────────────────────────────────────────────────────────
-function scoreBadgeCls(score: number | null, max: number): string {
-  if (score === null || max === 0) return '';
+function riceScoreTone(score: number | null, max: number): TaskScoreTone {
+  if (score === null || max === 0) return 'muted';
   const pct = score / max;
-  if (pct >= 0.66) return 'bg-emerald-100 text-emerald-700';
-  if (pct >= 0.33) return 'bg-amber-50 text-amber-700';
-  return 'bg-slate-100 text-slate-500';
+  if (pct >= 0.66) return 'primary';
+  if (pct >= 0.33) return 'warning';
+  return 'muted';
 }
 
-function bugScoreCls(score: number | null): string {
-  if (score === null) return '';
-  if (score >= 75) return 'bg-red-100 text-red-700';
-  if (score >= 50) return 'bg-orange-100 text-orange-700';
-  if (score >= 20) return 'bg-amber-50 text-amber-700';
-  return 'bg-slate-100 text-slate-500';
+function bugScoreTone(score: number | null): TaskScoreTone {
+  if (score === null) return 'muted';
+  if (score >= 75) return 'danger';
+  if (score >= 50) return 'orange';
+  if (score >= 20) return 'warning';
+  return 'muted';
 }
 
 function bugSlaLabel(score: number): string {
@@ -117,37 +135,36 @@ function bugSlaLabel(score: number): string {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-function TableSelect({ options, value, onChange, disabled, placeholder = 'Выбрать…', getLabel = String }: {
+function HeaderLabel({ title, hint, align = 'left' }: { title: string; hint?: string; align?: 'left' | 'center' }) {
+  return (
+    <div className={align === 'center' ? 'text-center' : undefined}>
+      <span>{title}</span>
+      {hint ? <span className="block text-[10px] font-normal normal-case tracking-normal text-muted-foreground">{hint}</span> : null}
+    </div>
+  );
+}
+
+function TableSelect({ options, value, onChange, disabled, placeholder = 'Выбрать…', getLabel = String, className = 'min-w-[10rem]' }: {
   options: readonly number[]; value: string; onChange: (v: string) => void;
-  disabled?: boolean; placeholder?: string; getLabel?: (v: number) => string;
+  disabled?: boolean; placeholder?: string; getLabel?: (v: number) => string; className?: string;
 }) {
   return (
-    <div className="relative min-w-0">
-      <select
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-        className={`w-full min-w-0 appearance-none rounded-xl border px-3 py-2 pr-8 text-sm font-semibold outline-none transition-all duration-200 ${
-          disabled
-            ? 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
-            : 'border-gray-100 bg-gray-50 text-slate-900 cursor-pointer focus:border-donezo-primary focus:bg-white focus:ring-2 focus:ring-donezo-light'
-        }`}
-      >
-        <option value="">{placeholder}</option>
+    <Select
+      value={value || EMPTY_SELECT_VALUE}
+      onValueChange={(nextValue) => onChange(nextValue === EMPTY_SELECT_VALUE ? '' : nextValue)}
+      disabled={disabled}
+    >
+      <SelectTrigger className={`h-9 rounded-xl text-sm font-semibold ${className}`}>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={EMPTY_SELECT_VALUE}>{placeholder}</SelectItem>
         {options.map((opt) => {
           const s = String(opt);
-          return <option key={s} value={s}>{getLabel(opt)}</option>;
+          return <SelectItem key={s} value={s}>{getLabel(opt)}</SelectItem>;
         })}
-      </select>
-      <svg
-        className={`pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 ${disabled ? 'text-gray-300' : 'text-gray-400'}`}
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-      </svg>
-    </div>
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -160,43 +177,31 @@ function Stepper({ value, onChange, disabled, min = EFFORT_MIN, max = EFFORT_MAX
   const dec = (n: number) => onChange(String(Math.max(min, +(n - step).toFixed(1))));
   const inc = (n: number) => onChange(String(Math.min(max, +(n + step).toFixed(1))));
   return (
-    <div className={`inline-flex items-center border rounded-full overflow-hidden transition-colors ${disabled ? 'border-gray-100 bg-gray-50' : 'border-gray-200 bg-white focus-within:border-donezo-primary focus-within:ring-2 focus-within:ring-donezo-light'}`}>
-      <button disabled={disabled}
-        className={`w-9 h-10 border-none text-gray-700 text-xl font-bold leading-none flex items-center justify-center flex-shrink-0 transition-colors ${disabled ? 'opacity-50 cursor-not-allowed bg-transparent' : 'cursor-pointer bg-gray-50 hover:bg-donezo-light hover:text-donezo-primary'}`}
-        onClick={() => { if (!disabled) dec(num); }}>−</button>
+    <div className={`inline-flex h-9 items-center overflow-hidden rounded-xl border shadow-xs transition-colors ${disabled ? 'border-border bg-muted/35 opacity-50' : 'border-input bg-muted/35 focus-within:border-ring focus-within:bg-background focus-within:ring-2 focus-within:ring-ring/20'}`}>
+      <Button disabled={disabled} type="button"
+        variant="ghost" size="icon"
+        className={`h-9 w-8 rounded-none border-r ${disabled ? 'opacity-50' : 'hover:bg-blue-50 hover:text-blue-700'}`}
+        onClick={() => { if (!disabled) dec(num); }}>−</Button>
       <input disabled={disabled}
-        className={`w-12 text-center text-sm font-bold border-none outline-none h-10 no-spinner transition-colors text-slate-900 caret-slate-900 ${disabled ? 'bg-transparent text-gray-400' : 'bg-white'}`}
+        className={`h-9 w-12 border-none bg-transparent text-center text-sm font-bold text-slate-900 outline-none no-spinner caret-slate-900 transition-colors ${disabled ? 'text-gray-400' : ''}`}
         type="number" min={min} max={max} step={step} value={value}
         onChange={(e) => { if (!disabled) onChange(e.target.value); }} />
-      <button disabled={disabled}
-        className={`w-9 h-10 border-none text-gray-700 text-xl font-bold leading-none flex items-center justify-center flex-shrink-0 transition-colors ${disabled ? 'opacity-50 cursor-not-allowed bg-transparent' : 'cursor-pointer bg-gray-50 hover:bg-donezo-light hover:text-donezo-primary'}`}
-        onClick={() => { if (!disabled) inc(num); }}>+</button>
+      <Button disabled={disabled} type="button"
+        variant="ghost" size="icon"
+        className={`h-9 w-8 rounded-none border-l ${disabled ? 'opacity-50' : 'hover:bg-blue-50 hover:text-blue-700'}`}
+        onClick={() => { if (!disabled) inc(num); }}>+</Button>
     </div>
   );
 }
 
-// ── Chevron icon ──────────────────────────────────────────────────────────────
-function SortChevron({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
+function RankCell({ value, isDirty }: { value: number | null; isDirty: boolean }) {
   return (
-    <svg className={`w-3.5 h-3.5 transition-transform duration-200 ${active ? 'text-donezo-primary opacity-100' : 'text-gray-300 opacity-0 group-hover/sort:opacity-100'} ${active && dir === 'desc' ? 'rotate-180' : ''}`}
-      fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
-    </svg>
-  );
-}
-
-// ── Jira link cell ────────────────────────────────────────────────────────────
-function IssueLink({ issueKey, isDirty }: { issueKey: string; isDirty: boolean }) {
-  return (
-    <td className="px-3 py-2.5 align-middle whitespace-nowrap relative">
+    <div className="relative text-center text-xs font-bold text-gray-400 group-hover:text-slate-900">
       {isDirty && (
-        <div className="absolute left-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-orange-400 shadow-sm" title="Несохраненные изменения" />
+        <div className="absolute left-1 top-1/2 size-2 -translate-y-1/2 rounded-full bg-orange-400 shadow-sm" title="Несохраненные изменения" />
       )}
-      <a href={`${JIRA_BASE_URL}/${issueKey}`} target="_blank" rel="noopener noreferrer"
-        className="font-semibold text-blue-600 hover:text-blue-800 hover:underline">
-        {issueKey}
-      </a>
-    </td>
+      {value ?? '—'}
+    </div>
   );
 }
 
@@ -214,6 +219,10 @@ interface Props {
   onSendToQueue: (items: string[]) => void;
   onSwitchToMetrics: () => void;
   onDirtyChange?: (isDirty: boolean) => void;
+  onSaved?: () => void;
+  embedded?: boolean;
+  defaultTab?: ScoringTab;
+  allowedTabs?: ScoringTab[];
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -230,10 +239,14 @@ export function RiceSection({
   onSendToQueue,
   onSwitchToMetrics,
   onDirtyChange,
+  onSaved,
+  embedded = false,
+  defaultTab = 'rice',
+  allowedTabs,
 }: Props) {
 
   // ── State ─────────────────────────────────────────────────────────────────
-  const [scoringTab, setScoringTab] = useState<ScoringTab>('rice');
+  const [scoringTab, setScoringTab] = useState<ScoringTab>(defaultTab);
   const [scores,    setScores]    = useState<Map<string, ScoreRow>>(new Map());
   const [bugScores, setBugScores] = useState<Map<string, BugRow>>(new Map());
   const [tdScores,  setTdScores]  = useState<Map<string, TdRow>>(new Map());
@@ -249,7 +262,7 @@ export function RiceSection({
   // Tech Debt sort
   const [tdSortDir, setTdSortDir] = useState<'asc' | 'desc'>('desc');
 
-  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [saving,  setSaving]  = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
@@ -272,6 +285,11 @@ export function RiceSection({
   useEffect(() => {
     onDirtyChange?.(dirtyKeys.size > 0);
   }, [dirtyKeys.size, onDirtyChange]);
+
+  useEffect(() => {
+    if (!allowedTabs?.length) return;
+    if (!allowedTabs.includes(scoringTab)) setScoringTab(allowedTabs[0]);
+  }, [allowedTabs, scoringTab]);
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const save = async () => {
@@ -314,7 +332,9 @@ export function RiceSection({
       if (!updates.length) { setMsg({ text: 'Нет задач с корректно заполненными оценками для сохранения', ok: false }); return; }
       await saveRiceScores(n8nBaseUrl, updates);
       setDirtyKeys(new Set());
+      onDirtyChange?.(false);
       setMsg({ text: `Успешно сохранено ${updates.length} задач`, ok: true });
+      onSaved?.();
     } catch (e) {
       setMsg({ text: `Ошибка при сохранении: ${(e as Error).message}`, ok: false });
     } finally { setSaving(false); }
@@ -403,17 +423,305 @@ export function RiceSection({
     onSwitchToMetrics();
   };
 
-  // ── Style helpers ─────────────────────────────────────────────────────────
-  const btnSecondary = 'px-6 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-full text-sm font-bold cursor-pointer transition-all duration-200 hover:bg-donezo-light hover:text-donezo-dark hover:border-donezo-primary hover:-translate-y-0.5 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none shadow-sm';
-  const btnPrimary   = 'px-6 py-2.5 bg-donezo-dark text-white rounded-full text-sm font-bold cursor-pointer border-none transition-all duration-200 hover:bg-donezo-primary hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none';
-  const thBase       = 'px-3 py-3.5 text-xs font-bold uppercase tracking-wider text-donezo-dark border-b-2 border-gray-200 bg-white sticky top-0 z-10';
-  const thSort       = `${thBase} cursor-pointer hover:bg-gray-50 transition-colors group/sort`;
+  const riceColumns = useMemo<ColumnDef<RiceIssue>[]>(() => [
+    {
+      id: 'rank',
+      header: '#',
+      cell: ({ row }) => {
+        const score = calcScore(scores.get(row.original.key) ?? initRow(row.original));
+        return <RankCell value={score !== null ? row.index + 1 : null} isDirty={dirtyKeys.has(row.original.key)} />;
+      },
+    },
+    {
+      id: 'key',
+      header: () => (
+        <TasksDataTableSortHeader
+          active={sortField === 'key'}
+          dir={sortDir}
+          onClick={() => { if (sortField === 'key') setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortField('key'); setSortDir('asc'); } }}
+        >
+          Задача
+        </TasksDataTableSortHeader>
+      ),
+      cell: ({ row }) => <IssueKeyCell issueKey={row.original.key} isDirty={false} />,
+    },
+    {
+      id: 'summary',
+      header: () => <HeaderLabel title="Summary" hint="контекст задачи" />,
+      cell: ({ row }) => <SummaryCell>{row.original.summary}</SummaryCell>,
+    },
+    {
+      id: 'status',
+      header: 'Статус',
+      cell: ({ row }) => <StatusCell status={row.original.status} />,
+    },
+    {
+      id: 'reach',
+      header: () => <HeaderLabel title="Reach" hint="польз./мес." />,
+      cell: ({ row }) => {
+        const scoreRow = scores.get(row.original.key) ?? initRow(row.original);
+        return (
+          <Input
+            className={`h-9 w-24 rounded-xl font-semibold no-spinner ${saving ? 'border-transparent bg-transparent text-gray-400' : ''}`}
+            type="number"
+            min={0}
+            placeholder="0"
+            value={scoreRow.reach}
+            disabled={saving}
+            onChange={(e) => setField(row.original.key, 'reach', e.target.value)}
+          />
+        );
+      },
+    },
+    {
+      id: 'impact',
+      header: () => <HeaderLabel title="Impact" hint="множитель" />,
+      cell: ({ row }) => {
+        const scoreRow = scores.get(row.original.key) ?? initRow(row.original);
+        return (
+          <TableSelect
+            options={IMPACT_OPTIONS}
+            value={scoreRow.impact}
+            onChange={(v) => setField(row.original.key, 'impact', v)}
+            disabled={saving}
+            className="min-w-[9.5rem]"
+            getLabel={(v) => `${IMPACT_LABELS[String(v)]} (${v})`}
+          />
+        );
+      },
+    },
+    {
+      id: 'confidence',
+      header: () => <HeaderLabel title="Confidence" hint="уверенность" />,
+      cell: ({ row }) => {
+        const scoreRow = scores.get(row.original.key) ?? initRow(row.original);
+        return (
+          <TableSelect
+            options={CONF_OPTIONS}
+            value={scoreRow.confidence}
+            onChange={(v) => setField(row.original.key, 'confidence', v)}
+            disabled={saving}
+            className="min-w-[8.5rem]"
+            getLabel={(v) => `${v}%`}
+          />
+        );
+      },
+    },
+    {
+      id: 'effort',
+      header: () => <HeaderLabel title="Effort" hint="сторипоинты" />,
+      cell: ({ row }) => {
+        const scoreRow = scores.get(row.original.key) ?? initRow(row.original);
+        return <Stepper value={scoreRow.effort} onChange={(v) => setField(row.original.key, 'effort', v)} disabled={saving} />;
+      },
+    },
+    {
+      id: 'rice',
+      header: () => (
+        <TasksDataTableSortHeader
+          active={sortField === 'rice'}
+          dir={sortDir}
+          align="center"
+          onClick={() => { if (sortField === 'rice') setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortField('rice'); setSortDir('desc'); } }}
+        >
+          RICE
+        </TasksDataTableSortHeader>
+      ),
+      cell: ({ row }) => {
+        const score = calcScore(scores.get(row.original.key) ?? initRow(row.original));
+        return (
+          <div className="relative text-center group/rice">
+            {score !== null
+              ? <TaskScoreBadge value={score} tone={riceScoreTone(score, maxRiceScore)} />
+              : <span className="text-gray-300 text-base">—</span>}
+            <Button
+              title="Установить срочно (RICE 9999)"
+              onClick={() => setUrgent9999(row.original.key)}
+              disabled={saving}
+              variant="secondary"
+              size="icon"
+              className="absolute right-0 top-1/2 size-7 -translate-y-1/2 opacity-0 transition-all group-hover/rice:opacity-100 disabled:opacity-0"
+            >🔥</Button>
+          </div>
+        );
+      },
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [scores, dirtyKeys, saving, sortField, sortDir, maxRiceScore]);
 
-  const SUB_TABS: { id: ScoringTab; label: string; scored: number; total: number }[] = [
-    { id: 'rice',     label: 'User Stories & Tasks', scored: scoredRice,  total: riceIssues.length },
-    { id: 'bugs',     label: 'Bugs',                  scored: scoredBugs,  total: bugIssues.length  },
-    { id: 'techdebt', label: 'Tech Debt',              scored: scoredTd,    total: tdIssues.length   },
+  const bugColumns = useMemo<ColumnDef<RiceIssue>[]>(() => [
+    {
+      id: 'rank',
+      header: '#',
+      cell: ({ row }) => {
+        const score = calcBugScore(bugScores.get(row.original.key) ?? initBugRow(row.original));
+        return <RankCell value={score !== null ? row.index + 1 : null} isDirty={dirtyKeys.has(row.original.key)} />;
+      },
+    },
+    {
+      id: 'key',
+      header: () => (
+        <TasksDataTableSortHeader
+          active={bugSortField === 'key'}
+          dir={bugSortDir}
+          onClick={() => { if (bugSortField === 'key') setBugSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBugSortField('key'); setBugSortDir('asc'); } }}
+        >
+          Задача
+        </TasksDataTableSortHeader>
+      ),
+      cell: ({ row }) => <IssueKeyCell issueKey={row.original.key} isDirty={false} />,
+    },
+    {
+      id: 'summary',
+      header: () => <HeaderLabel title="Summary" hint="контекст дефекта" />,
+      cell: ({ row }) => <SummaryCell>{row.original.summary}</SummaryCell>,
+    },
+    {
+      id: 'status',
+      header: 'Статус',
+      cell: ({ row }) => <StatusCell status={row.original.status} />,
+    },
+    {
+      id: 'risk',
+      header: () => <HeaderLabel title="R — Риски" hint="фин./юрид./репутационные" />,
+      cell: ({ row }) => {
+        const bugRow = bugScores.get(row.original.key) ?? initBugRow(row.original);
+        return <TableSelect options={[...BUG_RISK_OPTIONS]} value={bugRow.bug_risk} onChange={(v) => setBugField(row.original.key, 'bug_risk', v)} disabled={saving} getLabel={(v) => BUG_RISK_LABELS[v]} />;
+      },
+    },
+    {
+      id: 'process',
+      header: () => <HeaderLabel title="P — Процесс" hint="кредитный конвейер" />,
+      cell: ({ row }) => {
+        const bugRow = bugScores.get(row.original.key) ?? initBugRow(row.original);
+        return <TableSelect options={[...BUG_PROCESS_OPTIONS]} value={bugRow.bug_process} onChange={(v) => setBugField(row.original.key, 'bug_process', v)} disabled={saving} getLabel={(v) => BUG_PROCESS_LABELS[v]} />;
+      },
+    },
+    {
+      id: 'scale',
+      header: () => <HeaderLabel title="S — Масштаб" hint="охват проблемы" />,
+      cell: ({ row }) => {
+        const bugRow = bugScores.get(row.original.key) ?? initBugRow(row.original);
+        return <TableSelect options={[...BUG_SCALE_OPTIONS]} value={bugRow.bug_scale} onChange={(v) => setBugField(row.original.key, 'bug_scale', v)} disabled={saving} getLabel={(v) => BUG_SCALE_LABELS[v]} />;
+      },
+    },
+    {
+      id: 'workaround',
+      header: () => <HeaderLabel title="W — Workaround" hint="обходной путь" />,
+      cell: ({ row }) => {
+        const bugRow = bugScores.get(row.original.key) ?? initBugRow(row.original);
+        return <TableSelect options={[...BUG_WA_OPTIONS]} value={bugRow.bug_workaround} onChange={(v) => setBugField(row.original.key, 'bug_workaround', v)} disabled={saving} getLabel={(v) => BUG_WA_LABELS[v]} />;
+      },
+    },
+    {
+      id: 'score',
+      header: () => (
+        <TasksDataTableSortHeader
+          active={bugSortField === 'score'}
+          dir={bugSortDir}
+          align="center"
+          hint="макс. 100"
+          onClick={() => { if (bugSortField === 'score') setBugSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBugSortField('score'); setBugSortDir('desc'); } }}
+        >
+          Score
+        </TasksDataTableSortHeader>
+      ),
+      cell: ({ row }) => {
+        const score = calcBugScore(bugScores.get(row.original.key) ?? initBugRow(row.original));
+        const tone = bugScoreTone(score);
+        return (
+          <div className="text-center">
+            {score !== null ? (
+              <div className="flex flex-col items-center gap-1">
+                <TaskScoreBadge value={score} tone={tone} />
+                <TaskScoreLabelBadge tone={tone}>{bugSlaLabel(score)}</TaskScoreLabelBadge>
+              </div>
+            ) : <span className="text-gray-300 text-base">—</span>}
+          </div>
+        );
+      },
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [bugScores, dirtyKeys, saving, bugSortField, bugSortDir]);
+
+  const tdColumns = useMemo<ColumnDef<RiceIssue>[]>(() => [
+    {
+      id: 'rank',
+      header: '#',
+      cell: ({ row }) => {
+        const roi = calcTdRoi(tdScores.get(row.original.key) ?? initTdRow(row.original));
+        return <RankCell value={roi !== null ? row.index + 1 : null} isDirty={dirtyKeys.has(row.original.key)} />;
+      },
+    },
+    {
+      id: 'key',
+      header: 'Задача',
+      cell: ({ row }) => <IssueKeyCell issueKey={row.original.key} isDirty={false} />,
+    },
+    {
+      id: 'summary',
+      header: () => <HeaderLabel title="Summary" hint="контекст долга" />,
+      cell: ({ row }) => <SummaryCell>{row.original.summary}</SummaryCell>,
+    },
+    {
+      id: 'status',
+      header: 'Статус',
+      cell: ({ row }) => <StatusCell status={row.original.status} />,
+    },
+    {
+      id: 'impact',
+      header: () => <HeaderLabel title="Impact" hint="ценность решения (1–10)" />,
+      cell: ({ row }) => {
+        const tdRow = tdScores.get(row.original.key) ?? initTdRow(row.original);
+        return <Stepper value={tdRow.td_impact} onChange={(v) => setTdField(row.original.key, 'td_impact', v)} disabled={saving} min={1} max={10} step={1} />;
+      },
+    },
+    {
+      id: 'effort',
+      header: () => <HeaderLabel title="Effort" hint="трудозатраты (1–10)" />,
+      cell: ({ row }) => {
+        const tdRow = tdScores.get(row.original.key) ?? initTdRow(row.original);
+        return <Stepper value={tdRow.td_effort} onChange={(v) => setTdField(row.original.key, 'td_effort', v)} disabled={saving} min={1} max={10} step={1} />;
+      },
+    },
+    {
+      id: 'roi',
+      header: () => (
+        <TasksDataTableSortHeader
+          active
+          dir={tdSortDir}
+          align="center"
+          hint="Impact ÷ Effort"
+          onClick={() => setTdSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+        >
+          ROI
+        </TasksDataTableSortHeader>
+      ),
+      cell: ({ row }) => {
+        const tdRow = tdScores.get(row.original.key) ?? initTdRow(row.original);
+        const roi = calcTdRoi(tdRow);
+        const q = tdQuadrant(tdRow.td_impact, tdRow.td_effort);
+        return (
+          <div className="text-center">
+            {roi !== null && q ? (
+              <div className="flex flex-col items-center gap-1">
+                <TaskScoreBadge value={roi} tone={q.tone} />
+                <TaskScoreLabelBadge tone={q.tone}>{q.label}</TaskScoreLabelBadge>
+              </div>
+            ) : <span className="text-gray-300 text-base">—</span>}
+          </div>
+        );
+      },
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [tdScores, dirtyKeys, saving, tdSortDir]);
+
+  const ALL_SUB_TABS: { id: ScoringTab; label: string; scored: number; total: number }[] = [
+    { id: 'rice',     label: 'Задачи RICE', scored: scoredRice,  total: riceIssues.length },
+    { id: 'bugs',     label: 'Баги',        scored: scoredBugs,  total: bugIssues.length  },
+    { id: 'techdebt', label: 'Техдолг',     scored: scoredTd,    total: tdIssues.length   },
   ];
+  const SUB_TABS = ALL_SUB_TABS.filter((tab) => !allowedTabs || allowedTabs.includes(tab.id));
 
   // ── Current tab issues count for toolbar label ────────────────────────────
   const currentTabLabel = {
@@ -432,41 +740,42 @@ export function RiceSection({
   const currentTabItems = { rice: riceIssues, bugs: bugIssues, techdebt: tdIssues }[scoringTab];
 
   // ═══════════════════════════════════════════════════════════════════════════
-  return (
-    <div>
-      {/* Tooltip click-away overlay */}
-      {activeTooltip && <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setActiveTooltip(null)} />}
-
+  const content = (
+    <>
       {/* ── Sub-tab navigation ───────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 mb-6 flex-wrap">
-        <div className="flex bg-gray-50 rounded-2xl p-1 gap-1 border border-gray-100">
+      {SUB_TABS.length > 1 && <div className="mb-4 flex flex-wrap items-center gap-2">
+        <ToggleGroup
+          type="single"
+          value={scoringTab}
+          onValueChange={(value) => {
+            if (value) setScoringTab(value as ScoringTab);
+          }}
+          variant="outline"
+          className="w-fit rounded-xl border border-border bg-muted/35 p-1"
+        >
           {SUB_TABS.map(({ id, label, scored, total }) => (
-            <button key={id} onClick={() => setScoringTab(id)}
-              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 whitespace-nowrap ${
-                scoringTab === id
-                  ? 'bg-white text-donezo-dark shadow-sm border border-gray-100'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
-              }`}
+            <ToggleGroupItem
+              key={id}
+              value={id}
+              className="h-8 rounded-lg px-4 text-sm font-semibold whitespace-nowrap data-[state=on]:bg-background data-[state=on]:shadow-sm"
             >
               {label}
               {total > 0 && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none ${
-                  scoringTab === id ? 'bg-donezo-light text-donezo-dark' : 'bg-gray-200 text-gray-500'
-                }`}>
+                <Badge variant={scoringTab === id ? 'default' : 'secondary'} className="rounded-md px-1.5 py-0.5 text-[10px] font-bold leading-none">
                   {scored}/{total}
-                </span>
+                </Badge>
               )}
-            </button>
+            </ToggleGroupItem>
           ))}
-        </div>
-      </div>
+        </ToggleGroup>
+      </div>}
 
       {/* ── Collapsible guide (per tab) ──────────────────────────────────── */}
-      <div className="mb-6 bg-white border border-gray-100 rounded-3xl shadow-sm hover:shadow-md transition-shadow">
-        <details className="group [&_summary::-webkit-details-marker]:hidden">
-          <summary className="flex items-center justify-between px-6 py-4 cursor-pointer list-none font-bold text-slate-900 transition-colors hover:bg-donezo-light/50 rounded-3xl group-open:rounded-b-none">
+      <div className="mb-4 rounded-2xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md">
+        <Collapsible open={guideOpen} onOpenChange={setGuideOpen}>
+          <CollapsibleTrigger className="flex w-full cursor-pointer list-none items-center justify-between rounded-2xl px-5 py-3 text-left font-bold text-slate-900 transition-colors hover:bg-muted/50 data-[state=open]:rounded-b-none">
             <div className="flex items-center gap-3">
-              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-100 text-donezo-primary">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-700">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -475,12 +784,12 @@ export function RiceSection({
               {scoringTab === 'bugs'     && 'Как приоритизировать баги: FinTech Defect Scoring Model'}
               {scoringTab === 'techdebt' && 'Как приоритизировать техдолг: Impact / Effort Matrix'}
             </div>
-            <svg className="w-5 h-5 text-gray-400 transition-transform duration-300 group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${guideOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
-          </summary>
+          </CollapsibleTrigger>
 
-          <div className="px-6 py-5 text-sm text-gray-600 border-t border-gray-100 bg-gray-50/50 rounded-b-3xl leading-relaxed space-y-4">
+          <CollapsibleContent className="space-y-4 rounded-b-2xl border-t border-border bg-muted/25 px-5 py-4 text-sm leading-relaxed text-gray-600">
 
             {/* RICE guide */}
             {scoringTab === 'rice' && (
@@ -493,21 +802,21 @@ export function RiceSection({
                   </div>
                 </div>
                 <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                  <li className="rounded-xl border border-border bg-card p-4 shadow-sm">
                     <strong className="block text-slate-900 mb-1">🌍 Reach (Охват)</strong>
                     Сколько пользователей затронет изменение за месяц? (любое положительное число).
                   </li>
-                  <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                  <li className="rounded-xl border border-border bg-card p-4 shadow-sm">
                     <strong className="block text-slate-900 mb-1">🎯 Impact (Влияние)</strong>
                     Насколько сильно влияет на пользователя?
                     <span className="block mt-1 text-xs text-gray-400">Massive (3), High (2), Medium (1), Low (0.5), Minimal (0.25).</span>
                   </li>
-                  <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                  <li className="rounded-xl border border-border bg-card p-4 shadow-sm">
                     <strong className="block text-slate-900 mb-1">📊 Confidence (Уверенность)</strong>
                     Насколько вы уверены в оценках?
                     <span className="block mt-1 text-xs text-gray-400">100% (уверен), 80% (довольно уверен), 50% (интуиция), 25% (пальцем в небо).</span>
                   </li>
-                  <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                  <li className="rounded-xl border border-border bg-card p-4 shadow-sm">
                     <strong className="block text-slate-900 mb-1">⏳ Effort (Усилия)</strong>
                     Сколько сторипоинтов займёт внедрение? (от 0.5 до 40).
                   </li>
@@ -520,7 +829,7 @@ export function RiceSection({
               <>
                 <p><strong>FinTech Defect Scoring Model</strong> — реактивная оценка инцидентов, учитывающая специфику финансовых продуктов. Формула: <strong>Score = R + P + S + W</strong> (макс. 100)</p>
                 <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                  <li className="rounded-xl border border-border bg-card p-4 shadow-sm">
                     <strong className="block text-slate-900 mb-2">R — Риски (макс. 40)</strong>
                     Финансовые, юридические, репутационные последствия.
                     <ul className="mt-2 space-y-1 text-xs text-gray-500">
@@ -529,7 +838,7 @@ export function RiceSection({
                       <li><span className="font-bold text-slate-500">0</span> — Прямого влияния нет</li>
                     </ul>
                   </li>
-                  <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                  <li className="rounded-xl border border-border bg-card p-4 shadow-sm">
                     <strong className="block text-slate-900 mb-2">P — Процесс (макс. 30)</strong>
                     Влияние на кредитный конвейер.
                     <ul className="mt-2 space-y-1 text-xs text-gray-500">
@@ -538,7 +847,7 @@ export function RiceSection({
                       <li><span className="font-bold text-slate-500">2</span> — Косметический дефект</li>
                     </ul>
                   </li>
-                  <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                  <li className="rounded-xl border border-border bg-card p-4 shadow-sm">
                     <strong className="block text-slate-900 mb-2">S — Масштаб (макс. 15)</strong>
                     Охват затронутых клиентов.
                     <ul className="mt-2 space-y-1 text-xs text-gray-500">
@@ -547,7 +856,7 @@ export function RiceSection({
                       <li><span className="font-bold text-slate-500">2</span> — Единичные уникальные случаи</li>
                     </ul>
                   </li>
-                  <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                  <li className="rounded-xl border border-border bg-card p-4 shadow-sm">
                     <strong className="block text-slate-900 mb-2">W — Workaround (макс. 15)</strong>
                     Есть ли обходной путь.
                     <ul className="mt-2 space-y-1 text-xs text-gray-500">
@@ -557,7 +866,7 @@ export function RiceSection({
                     </ul>
                   </li>
                 </ul>
-                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm text-xs text-gray-600">
+                <div className="rounded-xl border border-border bg-card p-4 text-xs text-gray-600 shadow-sm">
                   <strong className="block text-slate-900 mb-2">SLA-матрица реагирования:</strong>
                   <ul className="space-y-1">
                     <li><span className="font-bold text-red-600">≥ 75 → BLOCKER</span> — Немедленный хотфикс, инцидент-команда, остановка релизов</li>
@@ -574,21 +883,21 @@ export function RiceSection({
               <>
                 <p><strong>Impact / Effort Matrix</strong> — максимизирует ROI от времени разработчиков. Задачи ранжируются по коэффициенту: <strong>ROI = Impact ÷ Effort</strong></p>
                 <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                  <li className="rounded-xl border border-border bg-card p-4 shadow-sm">
                     <strong className="block text-slate-900 mb-1">Impact (Влияние) — 1–10</strong>
                     Какую пользу принесёт решение: ускорение работы, снижение нагрузки, устранение боли разработчиков.
                     <div className="mt-2 text-xs text-gray-400">10 = огромная польза, 1 = почти никакой</div>
                   </li>
-                  <li className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                  <li className="rounded-xl border border-border bg-card p-4 shadow-sm">
                     <strong className="block text-slate-900 mb-1">Effort (Усилия) — 1–10</strong>
                     Сколько времени, денег и человеческих ресурсов потребуется на реализацию.
                     <div className="mt-2 text-xs text-gray-400">10 = огромные затраты, 1 = минимум усилий</div>
                   </li>
                 </ul>
-                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm text-xs text-gray-600">
+                <div className="rounded-xl border border-border bg-card p-4 text-xs text-gray-600 shadow-sm">
                   <strong className="block text-slate-900 mb-2">Матрица квадрантов (порог = 5):</strong>
                   <ul className="space-y-1">
-                    <li><span className="font-bold text-emerald-700">Быстрая победа</span> — Impact &gt; 5, Effort ≤ 5 → Высший приоритет, максимальный ROI</li>
+                    <li><span className="font-bold text-blue-700">Быстрая победа</span> — Impact &gt; 5, Effort ≤ 5 → Высший приоритет, максимальный ROI</li>
                     <li><span className="font-bold text-blue-700">Крупный проект</span> — Impact &gt; 5, Effort &gt; 5 → Стратегический долг, брать дозированно</li>
                     <li><span className="font-bold text-amber-700">Фоновая задача</span> — Impact ≤ 5, Effort ≤ 5 → Делать в свободное время</li>
                     <li><span className="font-bold text-red-700">Трата времени</span> — Impact ≤ 5, Effort &gt; 5 → Заморозить или удалить из бэклога</li>
@@ -597,41 +906,39 @@ export function RiceSection({
                 <p className="text-xs text-gray-400">Задачи отсортированы по убыванию ROI — «быстрые победы» с наивысшим коэффициентом вверху.</p>
               </>
             )}
-          </div>
-        </details>
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
       {/* ── Toolbar ──────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+      <div className="mb-3 flex flex-col gap-3 rounded-2xl border border-border bg-muted/25 p-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <div className="text-lg font-bold text-slate-900">{currentTabTitle}</div>
+          <div className="text-sm font-semibold text-slate-900">{currentTabTitle}</div>
           {issues.length > 0 && (
             <div className="text-xs text-gray-400 mt-1">{currentTabLabel}</div>
           )}
-          {error ? (
-            <div className="mt-2 inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-              {error}
-            </div>
-          ) : lastUpdatedText ? (
-            <div className="mt-2 inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-500">
-              {lastUpdatedText}
-            </div>
+          {!embedded && error ? (
+            <div className="mt-2"><StatusHint tone="error">{error}</StatusHint></div>
+          ) : !embedded && lastUpdatedText ? (
+            <div className="mt-2"><StatusHint>{lastUpdatedText}</StatusHint></div>
           ) : null}
         </div>
-        <div className="flex gap-2 flex-wrap items-center">
-          <button
-            className={btnSecondary}
+        <div className="flex flex-wrap items-center gap-2">
+          {!embedded && <Button
+            variant="secondary"
             onClick={onRefreshFromJira}
             disabled={loading || saving || refreshBlocked}
             title={refreshBlocked ? refreshBlockedReason : 'Обновить snapshot из Jira'}
           >
             {loading || refreshing ? 'Обновление…' : 'Обновить из Jira'}
-          </button>
+          </Button>}
           {issues.length > 0 && (
             <>
               {(scoringTab === 'rice' || scoringTab === 'techdebt') && (
-                <button
-                  className={`${btnSecondary} flex items-center justify-center min-w-[36px] px-2 leading-none`}
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="min-w-[36px]"
                   onClick={() => setSortTrigger(t => t + 1)}
                   disabled={saving || loading}
                   title="Применить сортировку"
@@ -639,19 +946,19 @@ export function RiceSection({
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
                   </svg>
-                </button>
+                </Button>
               )}
-              <button
-                className={`${btnSecondary} ${dirtyKeys.size > 0 ? 'bg-donezo-light border-donezo-light text-donezo-dark hover:bg-donezo-primary hover:text-white' : ''}`}
+              <Button
+                variant={dirtyKeys.size > 0 ? 'default' : 'secondary'}
                 onClick={save}
                 disabled={saving || loading || dirtyKeys.size === 0}
               >
                 {saving ? 'Сохранение…' : `Сохранить оценки${dirtyKeys.size > 0 ? ` (${dirtyKeys.size})` : ''}`}
-              </button>
+              </Button>
               {scoringTab === 'rice' && scoredRice > 0 && (
-                <button className={btnPrimary} onClick={sendToQueue} disabled={loading || saving}>
+                <Button onClick={sendToQueue} disabled={loading || saving}>
                   Отправить в очередь MC →
-                </button>
+                </Button>
               )}
             </>
           )}
@@ -660,376 +967,61 @@ export function RiceSection({
 
       {/* ── Status message ────────────────────────────────────────────────── */}
       {msg && (
-        <div className={`text-sm px-3 py-2 rounded-lg mb-4 border ${msg.ok ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-red-50 text-red-800 border-red-200'}`}>
-          {msg.text}
-        </div>
+        <Alert variant={msg.ok ? 'success' : 'destructive'} className="mb-4"><AlertDescription>{msg.text}</AlertDescription></Alert>
       )}
 
       {!msg && refreshBlocked && (
-        <div className="text-sm px-3 py-2 rounded-lg mb-4 border bg-amber-50 text-amber-800 border-amber-200">
-          {refreshBlockedReason}
-        </div>
+        <Alert variant="default" className="mb-4 border-amber-200 bg-amber-50 text-amber-800"><AlertDescription>{refreshBlockedReason}</AlertDescription></Alert>
       )}
 
       {/* ── Empty states ─────────────────────────────────────────────────── */}
       {issues.length === 0 && !loading && (
-        <div className="flex justify-center py-16">
-          <div className="text-center">
-            <div className="text-base font-medium text-gray-600 mb-2">
-              {scoringTab === 'rice'     && <>RICE = <strong>Reach</strong> × <strong>Impact</strong> × <strong>Confidence%</strong> / <strong>Effort</strong></>}
-              {scoringTab === 'bugs'     && <>Score = <strong>R</strong> (Риски) + <strong>P</strong> (Процесс) + <strong>S</strong> (Масштаб) + <strong>W</strong> (Workaround)</>}
-              {scoringTab === 'techdebt' && <>ROI = <strong>Impact</strong> ÷ <strong>Effort</strong> → Квадранты приоритизации</>}
-            </div>
-            <div className="text-sm text-gray-400">
-              {n8nBaseUrl ? 'Данные загружаются автоматически при открытии вкладки. Кнопка сверху запускает принудительное обновление из Jira.' : 'Укажите n8n URL в настройках'}
-            </div>
-          </div>
-        </div>
+        <EmptyState
+          title={scoringTab === 'rice' ? 'RICE: Reach × Impact × Confidence / Effort' : scoringTab === 'bugs' ? 'Score = R + P + S + W' : 'ROI = Impact / Effort'}
+          description={n8nBaseUrl ? 'Данные загружаются автоматически при открытии вкладки. Кнопка сверху запускает принудительное обновление из Jira.' : 'Укажите n8n URL в настройках'}
+        />
       )}
 
       {issues.length > 0 && currentTabItems.length === 0 && (
-        <div className="flex justify-center py-16">
-          <div className="text-center text-sm text-gray-400">
-            Задачи этого типа не найдены в загруженных данных
-          </div>
-        </div>
+        <EmptyState title="Пустая категория" description="Задачи этого типа не найдены в загруженных данных" />
       )}
 
-      {/* ════════════════════════════════════════════════════════════════════
-          TAB: RICE (User Stories & Tasks)
-      ════════════════════════════════════════════════════════════════════ */}
-      {scoringTab === 'rice' && sortedRice.length > 0 && (
-        <div className="overflow-auto max-h-[65vh] bg-white rounded-3xl border border-gray-100 px-2 pb-2">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className={`w-11 text-center ${thBase}`}>#</th>
-                <th className={`w-28 ${thSort}`}
-                  onClick={() => { if (sortField === 'key') setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortField('key'); setSortDir('asc'); } }}>
-                  <div className="flex items-center gap-1">Задача <SortChevron active={sortField === 'key'} dir={sortDir} /></div>
-                </th>
-                <th className={`${thBase}`}>Summary</th>
-                <th className={`w-36 ${thBase}`}>Статус</th>
-                <th className={`w-28 ${thBase} relative`}>
-                  <div className="flex items-center gap-1">
-                    Reach
-                    <button onClick={(e) => { e.stopPropagation(); setActiveTooltip(activeTooltip === 'reach' ? null : 'reach'); }}
-                      className={`transition-colors rounded-full p-0.5 ${activeTooltip === 'reach' ? 'bg-donezo-light text-donezo-primary' : 'text-gray-400 hover:text-donezo-primary hover:bg-gray-50'}`}>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    </button>
-                  </div>
-                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">польз./мес.</span>
-                  {activeTooltip === 'reach' && (
-                    <div className="absolute top-full mt-2 left-0 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 z-50 normal-case font-normal text-sm" onClick={e => e.stopPropagation()}>
-                      <div className="font-bold text-slate-900 mb-2 border-b border-gray-50 pb-2 flex items-center gap-2"><span className="text-xl">🌍</span> Reach (Охват)</div>
-                      <div className="text-gray-600 leading-relaxed">
-                        Сколько уникальных пользователей затронет изменение за месяц?
-                        <div className="mt-2 text-xs bg-gray-50 p-2 rounded-lg text-slate-800">
-                          <strong className="block text-donezo-primary mb-1">Пример:</strong>
-                          Если фичей воспользуются 500 клиентов — впишите <strong>500</strong>.
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </th>
-                <th className={`w-52 ${thBase} relative`}>
-                  <div className="flex items-center gap-1">
-                    Impact
-                    <button onClick={(e) => { e.stopPropagation(); setActiveTooltip(activeTooltip === 'impact' ? null : 'impact'); }}
-                      className={`transition-colors rounded-full p-0.5 ${activeTooltip === 'impact' ? 'bg-donezo-light text-donezo-primary' : 'text-gray-400 hover:text-donezo-primary hover:bg-gray-50'}`}>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    </button>
-                  </div>
-                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">множитель</span>
-                  {activeTooltip === 'impact' && (
-                    <div className="absolute top-full mt-2 left-0 md:-left-8 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 z-50 normal-case font-normal text-sm" onClick={e => e.stopPropagation()}>
-                      <div className="font-bold text-slate-900 mb-2 border-b border-gray-50 pb-2 flex items-center gap-2"><span className="text-xl">🎯</span> Impact (Влияние)</div>
-                      <div className="text-gray-600 leading-relaxed mb-2">Насколько сильно изменение решает боль клиента?</div>
-                      <ul className="space-y-1.5 text-xs">
-                        <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1 shrink-0"></span><span className="text-slate-800"><strong>3 (Massive):</strong> Огромное влияние, киллер-фича.</span></li>
-                        <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-orange-400 mt-1 shrink-0"></span><span className="text-slate-800"><strong>2 (High):</strong> Заметное решение сильной боли.</span></li>
-                        <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1 shrink-0"></span><span className="text-slate-800"><strong>1 (Medium):</strong> Среднее, обычное улучшение.</span></li>
-                        <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1 shrink-0"></span><span className="text-slate-800"><strong>0.5 (Low):</strong> Небольшое «nice to have».</span></li>
-                        <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-green-200 mt-1 shrink-0"></span><span className="text-slate-800"><strong>0.25 (Minimal):</strong> Едва заметная микро-оптимизация.</span></li>
-                      </ul>
-                    </div>
-                  )}
-                </th>
-                <th className={`w-40 ${thBase} relative`}>
-                  <div className="flex items-center gap-1">
-                    Confidence
-                    <button onClick={(e) => { e.stopPropagation(); setActiveTooltip(activeTooltip === 'confidence' ? null : 'confidence'); }}
-                      className={`transition-colors rounded-full p-0.5 ${activeTooltip === 'confidence' ? 'bg-donezo-light text-donezo-primary' : 'text-gray-400 hover:text-donezo-primary hover:bg-gray-50'}`}>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    </button>
-                  </div>
-                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">уверенность</span>
-                  {activeTooltip === 'confidence' && (
-                    <div className="absolute top-full mt-2 left-0 md:-left-8 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 z-50 normal-case font-normal text-sm" onClick={e => e.stopPropagation()}>
-                      <div className="font-bold text-slate-900 mb-2 border-b border-gray-50 pb-2 flex items-center gap-2"><span className="text-xl">📊</span> Confidence (Уверенность)</div>
-                      <div className="text-gray-600 leading-relaxed mb-2">Насколько вы уверены в оценках Reach, Impact и Effort?</div>
-                      <ul className="space-y-1.5 text-xs">
-                        <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1 shrink-0"></span><span className="text-slate-800"><strong>100%:</strong> Есть точные данные.</span></li>
-                        <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1 shrink-0"></span><span className="text-slate-800"><strong>80%:</strong> Хорошие данные, есть допущения.</span></li>
-                        <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-blue-300 mt-1 shrink-0"></span><span className="text-slate-800"><strong>50%:</strong> Уверенность ниже среднего.</span></li>
-                        <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-slate-300 mt-1 shrink-0"></span><span className="text-slate-800"><strong>25%:</strong> Пальцем в небо.</span></li>
-                      </ul>
-                    </div>
-                  )}
-                </th>
-                <th className={`w-32 ${thBase} relative`}>
-                  <div className="flex items-center gap-1">
-                    Effort
-                    <button onClick={(e) => { e.stopPropagation(); setActiveTooltip(activeTooltip === 'effort' ? null : 'effort'); }}
-                      className={`transition-colors rounded-full p-0.5 ${activeTooltip === 'effort' ? 'bg-donezo-light text-donezo-primary' : 'text-gray-400 hover:text-donezo-primary hover:bg-gray-50'}`}>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    </button>
-                  </div>
-                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">сторипоинты</span>
-                  {activeTooltip === 'effort' && (
-                    <div className="absolute top-full mt-2 right-0 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 z-50 normal-case font-normal text-sm" onClick={e => e.stopPropagation()}>
-                      <div className="font-bold text-slate-900 mb-2 border-b border-gray-50 pb-2 flex items-center gap-2"><span className="text-xl">⏳</span> Effort (Усилия)</div>
-                      <div className="text-gray-600 leading-relaxed">
-                        Сколько сторипоинтов займёт реализация? (0.5–40). Чем больше Effort, тем ниже RICE Score.
-                      </div>
-                    </div>
-                  )}
-                </th>
-                <th className={`w-24 text-center ${thSort}`}
-                  onClick={() => { if (sortField === 'rice') setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortField('rice'); setSortDir('desc'); } }}>
-                  <div className="flex items-center justify-center gap-1">
-                    RICE <SortChevron active={sortField === 'rice'} dir={sortDir} />
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedRice.map((issue, idx) => {
-                const row   = scores.get(issue.key) ?? initRow(issue);
-                const score = calcScore(row);
-                const cls   = scoreBadgeCls(score, maxRiceScore);
-                return (
-                  <tr key={issue.key} className="border-b border-gray-50 last:border-none hover:bg-donezo-light/30 transition-colors duration-200 group">
-                    <td className="px-3 py-3.5 text-center text-xs font-bold text-gray-400 align-middle relative group-hover:text-donezo-dark transition-colors">
-                      {dirtyKeys.has(issue.key) && <div className="absolute left-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-orange-400 shadow-sm" title="Несохраненные изменения" />}
-                      {score !== null ? idx + 1 : '—'}
-                    </td>
-                    <IssueLink issueKey={issue.key} isDirty={false} />
-                    <td className="px-3 py-2.5 align-middle text-slate-900 min-w-[200px]">{issue.summary}</td>
-                    <td className="px-3 py-2.5 align-middle text-xs text-gray-500 whitespace-nowrap">{issue.status}</td>
-                    <td className="px-3 py-2.5 align-middle">
-                      <input
-                        className={`w-24 px-3 py-2 border rounded-xl text-sm font-semibold outline-none no-spinner transition-all duration-200 text-slate-900 caret-slate-900 ${saving ? 'bg-transparent text-gray-400 border-transparent' : 'bg-gray-50 border-gray-100 focus:border-donezo-primary focus:bg-white focus:ring-2 focus:ring-donezo-light'}`}
-                        type="number" min={0} placeholder="0" value={row.reach} disabled={saving}
-                        onChange={(e) => setField(issue.key, 'reach', e.target.value)}
-                      />
-                    </td>
-                    <td className="px-3 py-2.5 align-middle">
-                      <TableSelect
-                        options={IMPACT_OPTIONS}
-                        value={row.impact}
-                        onChange={(v) => setField(issue.key, 'impact', v)}
-                        disabled={saving}
-                        getLabel={(v) => `${IMPACT_LABELS[String(v)]} (${v})`}
-                      />
-                    </td>
-                    <td className="px-3 py-2.5 align-middle">
-                      <TableSelect
-                        options={CONF_OPTIONS}
-                        value={row.confidence}
-                        onChange={(v) => setField(issue.key, 'confidence', v)}
-                        disabled={saving}
-                        getLabel={(v) => `${v}%`}
-                      />
-                    </td>
-                    <td className="px-3 py-2.5 align-middle">
-                      <Stepper value={row.effort} onChange={(v) => setField(issue.key, 'effort', v)} disabled={saving} />
-                    </td>
-                    <td className="px-3 py-2.5 text-center align-middle relative group/rice">
-                      {score !== null
-                        ? <span className={`inline-block text-sm font-bold px-3 py-1 rounded-full min-w-[52px] text-center transition-all ${cls}`}>{score}</span>
-                        : <span className="text-gray-300 text-base">—</span>}
-                      <button
-                        title="Установить срочно (RICE 9999)"
-                        onClick={() => setUrgent9999(issue.key)}
-                        disabled={saving}
-                        className="absolute right-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/rice:opacity-100 p-1 hover:scale-125 transition-all text-lg cursor-pointer bg-white rounded-full shadow-sm border border-gray-100 disabled:opacity-0 disabled:cursor-auto"
-                      >🔥</button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      {scoringTab === "rice" && sortedRice.length > 0 && (
+        <TasksDataTable
+          data={sortedRice}
+          columns={riceColumns}
+          getRowId={(issue) => issue.key}
+          footerText={String(sortedRice.length) + " " + (sortedRice.length === 1 ? "задача" : sortedRice.length < 5 ? "задачи" : "задач") + " в RICE"}
+          emptyTitle="Нет задач для RICE-оценки"
+        />
       )}
 
-      {/* ════════════════════════════════════════════════════════════════════
-          TAB: BUGS (FinTech Defect Scoring: R + P + S + W)
-      ════════════════════════════════════════════════════════════════════ */}
-      {scoringTab === 'bugs' && sortedBugs.length > 0 && (
-        <div className="overflow-auto max-h-[65vh] bg-white rounded-3xl border border-gray-100 px-2 pb-2">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className={`w-11 text-center ${thBase}`}>#</th>
-                <th className={`w-28 ${thSort}`}
-                  onClick={() => { if (bugSortField === 'key') setBugSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBugSortField('key'); setBugSortDir('asc'); } }}>
-                  <div className="flex items-center gap-1">Задача <SortChevron active={bugSortField === 'key'} dir={bugSortDir} /></div>
-                </th>
-                <th className={`${thBase}`}>Summary</th>
-                <th className={`w-36 ${thBase}`}>Статус</th>
-                <th className={`w-52 ${thBase}`}>
-                  R — Риски
-                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">Фин./юрид./репутационные</span>
-                </th>
-                <th className={`w-44 ${thBase}`}>
-                  P — Процесс
-                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">Кредитный конвейер</span>
-                </th>
-                <th className={`w-44 ${thBase}`}>
-                  S — Масштаб
-                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">Охват проблемы</span>
-                </th>
-                <th className={`w-44 ${thBase}`}>
-                  W — Workaround
-                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">Обходной путь</span>
-                </th>
-                <th className={`w-28 text-center ${thSort}`}
-                  onClick={() => { if (bugSortField === 'score') setBugSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBugSortField('score'); setBugSortDir('desc'); } }}>
-                  <div className="flex items-center justify-center gap-1">
-                    Score <SortChevron active={bugSortField === 'score'} dir={bugSortDir} />
-                  </div>
-                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">макс. 100</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedBugs.map((issue, idx) => {
-                const row   = bugScores.get(issue.key) ?? initBugRow(issue);
-                const score = calcBugScore(row);
-                return (
-                  <tr key={issue.key} className="border-b border-gray-50 last:border-none hover:bg-donezo-light/30 transition-colors duration-200">
-                    <td className="px-3 py-3.5 text-center text-xs font-bold text-gray-400 align-middle relative">
-                      {dirtyKeys.has(issue.key) && <div className="absolute left-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-orange-400 shadow-sm" title="Несохраненные изменения" />}
-                      {score !== null ? idx + 1 : '—'}
-                    </td>
-                    <IssueLink issueKey={issue.key} isDirty={false} />
-                    <td className="px-3 py-2.5 align-middle text-slate-900 min-w-[200px]">{issue.summary}</td>
-                    <td className="px-3 py-2.5 align-middle text-xs text-gray-500 whitespace-nowrap">{issue.status}</td>
-                    <td className="px-3 py-2.5 align-middle">
-                      <TableSelect options={[...BUG_RISK_OPTIONS]} value={row.bug_risk}
-                        onChange={(v) => setBugField(issue.key, 'bug_risk', v)} disabled={saving}
-                        getLabel={(v) => BUG_RISK_LABELS[v]} />
-                    </td>
-                    <td className="px-3 py-2.5 align-middle">
-                      <TableSelect options={[...BUG_PROCESS_OPTIONS]} value={row.bug_process}
-                        onChange={(v) => setBugField(issue.key, 'bug_process', v)} disabled={saving}
-                        getLabel={(v) => BUG_PROCESS_LABELS[v]} />
-                    </td>
-                    <td className="px-3 py-2.5 align-middle">
-                      <TableSelect options={[...BUG_SCALE_OPTIONS]} value={row.bug_scale}
-                        onChange={(v) => setBugField(issue.key, 'bug_scale', v)} disabled={saving}
-                        getLabel={(v) => BUG_SCALE_LABELS[v]} />
-                    </td>
-                    <td className="px-3 py-2.5 align-middle">
-                      <TableSelect options={[...BUG_WA_OPTIONS]} value={row.bug_workaround}
-                        onChange={(v) => setBugField(issue.key, 'bug_workaround', v)} disabled={saving}
-                        getLabel={(v) => BUG_WA_LABELS[v]} />
-                    </td>
-                    <td className="px-3 py-2.5 text-center align-middle">
-                      {score !== null ? (
-                        <div className="flex flex-col items-center gap-1">
-                          <span className={`inline-block text-sm font-bold px-3 py-1 rounded-full min-w-[48px] text-center transition-all ${bugScoreCls(score)}`}>{score}</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${bugScoreCls(score)}`}>{bugSlaLabel(score)}</span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-300 text-base">—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      {scoringTab === "bugs" && sortedBugs.length > 0 && (
+        <TasksDataTable
+          data={sortedBugs}
+          columns={bugColumns}
+          getRowId={(issue) => issue.key}
+          footerText={String(sortedBugs.length) + " " + (sortedBugs.length === 1 ? "баг" : sortedBugs.length < 5 ? "бага" : "багов") + " в оценке"}
+          emptyTitle="Нет багов для оценки"
+        />
       )}
 
-      {/* ════════════════════════════════════════════════════════════════════
-          TAB: TECH DEBT (Impact / Effort Matrix)
-      ════════════════════════════════════════════════════════════════════ */}
-      {scoringTab === 'techdebt' && sortedTd.length > 0 && (
-        <div className="overflow-auto max-h-[65vh] bg-white rounded-3xl border border-gray-100 px-2 pb-2">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className={`w-11 text-center ${thBase}`}>#</th>
-                <th className={`w-28 ${thBase}`}>Задача</th>
-                <th className={`${thBase}`}>Summary</th>
-                <th className={`w-36 ${thBase}`}>Статус</th>
-                <th className={`w-44 ${thBase}`}>
-                  Impact
-                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">ценность решения (1–10)</span>
-                </th>
-                <th className={`w-44 ${thBase}`}>
-                  Effort
-                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">трудозатраты (1–10)</span>
-                </th>
-                <th className={`w-36 text-center ${thSort}`}
-                  onClick={() => setTdSortDir(d => d === 'asc' ? 'desc' : 'asc')}>
-                  <div className="flex items-center justify-center gap-1">
-                    ROI <SortChevron active={true} dir={tdSortDir} />
-                  </div>
-                  <span className="block font-normal normal-case text-gray-400 tracking-normal text-[10px] mt-0.5">Impact ÷ Effort</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedTd.map((issue, idx) => {
-                const row = tdScores.get(issue.key) ?? initTdRow(issue);
-                const roi = calcTdRoi(row);
-                const q   = tdQuadrant(row.td_impact, row.td_effort);
-                return (
-                  <tr key={issue.key} className="border-b border-gray-50 last:border-none hover:bg-donezo-light/30 transition-colors duration-200">
-                    <td className="px-3 py-3.5 text-center text-xs font-bold text-gray-400 align-middle relative">
-                      {dirtyKeys.has(issue.key) && <div className="absolute left-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-orange-400 shadow-sm" title="Несохраненные изменения" />}
-                      {roi !== null ? idx + 1 : '—'}
-                    </td>
-                    <IssueLink issueKey={issue.key} isDirty={false} />
-                    <td className="px-3 py-2.5 align-middle text-slate-900 min-w-[200px]">{issue.summary}</td>
-                    <td className="px-3 py-2.5 align-middle text-xs text-gray-500 whitespace-nowrap">{issue.status}</td>
-                    <td className="px-3 py-2.5 align-middle">
-                      <Stepper value={row.td_impact} onChange={(v) => setTdField(issue.key, 'td_impact', v)}
-                        disabled={saving} min={1} max={10} step={1} />
-                    </td>
-                    <td className="px-3 py-2.5 align-middle">
-                      <Stepper value={row.td_effort} onChange={(v) => setTdField(issue.key, 'td_effort', v)}
-                        disabled={saving} min={1} max={10} step={1} />
-                    </td>
-                    <td className="px-3 py-2.5 text-center align-middle">
-                      {roi !== null && q ? (
-                        <div className="flex flex-col items-center gap-1">
-                          <span className={`inline-block text-sm font-bold px-3 py-1 rounded-full min-w-[48px] text-center transition-all ${q.cls}`}>{roi}</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${q.cls}`}>{q.label}</span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-300 text-base">—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      {scoringTab === "techdebt" && sortedTd.length > 0 && (
+        <TasksDataTable
+          data={sortedTd}
+          columns={tdColumns}
+          getRowId={(issue) => issue.key}
+          footerText={String(sortedTd.length) + " " + (sortedTd.length === 1 ? "задача" : sortedTd.length < 5 ? "задачи" : "задач") + " техдолга"}
+          emptyTitle="Нет техдолга для оценки"
+        />
       )}
 
       {/* ── FAB ──────────────────────────────────────────────────────────── */}
-      {dirtyKeys.size > 0 && (
+      {!embedded && dirtyKeys.size > 0 && (
         <div className="fixed bottom-8 right-8 z-50 group">
-          <div className="absolute -inset-2 bg-donezo-primary/20 blur-lg rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-          <button
-            className="relative px-8 py-4 bg-donezo-dark text-white rounded-full text-sm font-bold cursor-pointer border border-donezo-light shadow-2xl transition-all hover:bg-donezo-primary hover:-translate-y-1 flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+          <div className="absolute -inset-2 rounded-full bg-blue-500/20 opacity-0 blur-lg transition-opacity duration-300 pointer-events-none group-hover:opacity-100"></div>
+          <Button
+            className="relative h-auto rounded-full border border-blue-200 px-8 py-4 text-sm font-bold shadow-2xl transition-all hover:-translate-y-1 flex items-center gap-3"
             onClick={save} disabled={saving || loading}
           >
             {saving ? 'Сохранение...' : (
@@ -1040,9 +1032,21 @@ export function RiceSection({
                 Сохранить {dirtyKeys.size} изм.
               </>
             )}
-          </button>
+          </Button>
         </div>
       )}
-    </div>
+    </>
+  );
+
+  if (embedded) return <div className="flex flex-col gap-4">{content}</div>;
+
+  return (
+    <SectionCard
+      title="Scoring"
+      description="Единая панель приоритизации для RICE, багов и техдолга."
+      className="rounded-2xl"
+    >
+      {content}
+    </SectionCard>
   );
 }

@@ -68,6 +68,16 @@ export function normalizeJiraIssue(raw: RawJiraIssue): JiraIssueShort {
     rice_score: toNumber(raw.rice_score),
     bug_score: toNumber(raw.bug_score),
     td_roi: toNumber(raw.td_roi),
+    reach: toNumber(raw.reach),
+    impact: toNumber(raw.impact),
+    confidence: toNumber(raw.confidence),
+    effort: toNumber(raw.effort),
+    bug_risk: toNumber(raw.bug_risk),
+    bug_process: toNumber(raw.bug_process),
+    bug_scale: toNumber(raw.bug_scale),
+    bug_workaround: toNumber(raw.bug_workaround),
+    td_impact: toNumber(raw.td_impact),
+    td_effort: toNumber(raw.td_effort),
   };
 }
 

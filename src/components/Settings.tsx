@@ -1,5 +1,12 @@
 import type { Settings as SettingsType, JQLMode } from '../types';
 import { buildStandardMetricsJql, getStandardFilterDescription } from '../lib/metricsQuery';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { SectionCard } from '@/components/ui/admin';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface Props {
   settings: SettingsType;
@@ -9,84 +16,64 @@ interface Props {
   loadingLabel: string;
 }
 
-const inputCls = 'w-full px-3 py-2 border border-gray-100 rounded-xl text-sm font-semibold outline-none transition-all duration-200 focus:bg-white focus:border-donezo-primary focus:ring-2 focus:ring-donezo-light bg-gray-50';
-const labelCls = 'block text-xs font-bold text-gray-500 mb-1.5';
-
 export function Settings({ settings, onChange, onFetch, loading, loadingLabel }: Props) {
   const set = (patch: Partial<SettingsType>) => onChange({ ...settings, ...patch });
   const toggleMode = (mode: JQLMode) => set({ mode });
   const standardJql = buildStandardMetricsJql(settings.projectKey);
 
   return (
-    <div className="bg-white rounded-3xl p-6 mb-6 shadow-donezo border border-gray-100">
-      <div className="flex items-center justify-between mb-5">
-        <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">Настройки</div>
-      </div>
-
-      <div className="pb-4 mb-4 border-b border-gray-100">
-        <h3 className="text-sm font-bold text-gray-700 mb-3">Подключение</h3>
+    <SectionCard title="Настройки подключения" description="Быстрый конфиг источника данных и режима фильтрации для Jira/n8n.">
+      <div className="grid gap-5">
         <div>
-          <label className={labelCls}>n8n URL</label>
-          <input
+          <Label className="mb-2 block">n8n URL</Label>
+          <Input
             type="url"
-            className={inputCls}
             value={settings.n8nBaseUrl}
             placeholder="https://n8n.example.com"
             onChange={(e) => set({ n8nBaseUrl: e.target.value })}
           />
         </div>
-      </div>
 
-      <div>
-        <h3 className="text-sm font-bold text-gray-700 mb-3">Фильтрация</h3>
-        <div className="flex bg-gray-100 rounded-lg p-1 gap-0.5 mb-4 w-fit">
-          {(['standard', 'custom'] as JQLMode[]).map((m) => (
-            <button
-              key={m}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold cursor-pointer border-none transition-all duration-200 ${
-                settings.mode === m
-                  ? 'bg-white text-donezo-dark shadow-sm'
-                  : 'bg-transparent text-gray-500 hover:text-gray-900'
-              }`}
-              onClick={() => toggleMode(m)}
-            >
-              {m === 'standard' ? 'Стандартный' : 'Свой JQL'}
-            </button>
-          ))}
+        <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm font-semibold text-foreground">Фильтрация</div>
+            <Badge variant="outline">{settings.mode === 'standard' ? 'Standard' : 'Custom JQL'}</Badge>
+          </div>
+          <Tabs value={settings.mode} onValueChange={(value) => toggleMode(value as JQLMode)} className="gap-3">
+            <TabsList>
+              <TabsTrigger value="standard">Стандартный</TabsTrigger>
+              <TabsTrigger value="custom">Свой JQL</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
         {settings.mode === 'standard' ? (
           <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-[120px_auto] gap-3 items-end">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[140px_auto] md:items-end">
               <div>
-                <label className={labelCls}>Проект</label>
-                <input
+                <Label className="mb-2 block">Проект</Label>
+                <Input
                   type="text"
-                  className={inputCls}
                   value={settings.projectKey}
                   placeholder="PROJ"
                   onChange={(e) => set({ projectKey: e.target.value })}
                 />
               </div>
               <div>
-                <button
-                  className="px-6 py-2.5 bg-donezo-dark text-white rounded-full text-sm font-bold shadow-sm cursor-pointer border-none transition-all duration-200 hover:bg-donezo-primary hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none whitespace-nowrap"
-                  onClick={onFetch}
-                  disabled={loading}
-                >
+                <Button onClick={onFetch} disabled={loading}>
                   {loading ? loadingLabel : 'Загрузить данные'}
-                </button>
+                </Button>
               </div>
             </div>
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-              <div className="text-xs font-semibold text-gray-600">
+            <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+              <div className="text-sm text-muted-foreground">
                 {getStandardFilterDescription()}
               </div>
               <details className="mt-2">
-                <summary className="cursor-pointer list-none text-xs font-bold text-donezo-dark">
+                <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
                   Показать стандартный JQL
                 </summary>
-                <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words rounded-xl border border-gray-100 bg-white px-3 py-2 text-[11px] leading-relaxed text-gray-600">
+                <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-background px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
                   {standardJql}
                 </pre>
               </details>
@@ -95,27 +82,23 @@ export function Settings({ settings, onChange, onFetch, loading, loadingLabel }:
         ) : (
           <>
             <div>
-              <label className={labelCls}>JQL-запрос</label>
-              <textarea
+              <Label className="mb-2 block">JQL-запрос</Label>
+              <Textarea
                 rows={2}
-                className={`${inputCls} resize-y leading-relaxed`}
+                className="min-h-[90px] resize-y leading-relaxed"
                 value={settings.customJql}
                 placeholder='project = CREDITS ORDER BY created ASC'
                 onChange={(e) => set({ customJql: e.target.value })}
               />
             </div>
             <div className="mt-3">
-              <button
-                className="px-6 py-2.5 bg-donezo-dark text-white rounded-full text-sm font-bold shadow-sm cursor-pointer border-none transition-all duration-200 hover:bg-donezo-primary hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
-                onClick={onFetch}
-                disabled={loading}
-              >
+              <Button onClick={onFetch} disabled={loading}>
                 {loading ? loadingLabel : 'Загрузить данные'}
-              </button>
+              </Button>
             </div>
           </>
         )}
       </div>
-    </div>
+    </SectionCard>
   );
 }

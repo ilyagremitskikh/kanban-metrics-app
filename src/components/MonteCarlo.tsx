@@ -13,6 +13,14 @@ import {
 import { getDownstreamWipNow, getIssueAgeInActiveBucket, isDownstreamWipIssue } from '../lib/metrics';
 import { percentile, fmtNum } from '../lib/utils';
 import type { Issue, MCMode, QueueForecastMode, ThroughputWeek } from '../types';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { SectionCard } from '@/components/ui/admin';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 Chart.register(...registerables);
 
@@ -29,7 +37,7 @@ const fmtYear  = (d: Date) => d.toLocaleDateString('ru-RU', { year: 'numeric' })
 const MODE_META: Record<MCMode, { label: string; hint: string }> = {
   items: { label: 'N задач → когда?',  hint: 'Введите число задач — получите вероятностные даты завершения' },
   date:  { label: 'К дате → сколько?', hint: 'Выберите дату — узнайте сколько задач успеете закрыть' },
-  queue: { label: 'Очередь',           hint: 'Delivery forecast: когда будут готовы задачи после попадания в очередь разработки?' },
+  queue: { label: 'Очередь',           hint: 'Прогноз доставки: когда будут готовы задачи после попадания в очередь разработки?' },
 };
 
 const PCT_STYLES = {
@@ -38,8 +46,6 @@ const PCT_STYLES = {
   p95: { bg: 'bg-red-50',    label: 'text-red-700',   value: 'text-red-900' },
 };
 
-const inputCls = 'px-4 py-2 border border-gray-100 bg-gray-50 rounded-xl text-sm font-semibold outline-none transition-all duration-200 focus:bg-white focus:border-donezo-primary focus:ring-2 focus:ring-donezo-light';
-const btnPrimary = 'px-6 py-2.5 bg-donezo-dark text-white rounded-full text-sm font-bold cursor-pointer border-none transition-all duration-200 hover:bg-donezo-primary hover:-translate-y-0.5 hover:shadow-lg whitespace-nowrap';
 const QUEUE_MODE_META: Record<QueueForecastMode, { label: string; hint: string }> = {
   conservative: { label: 'Осторожный', hint: 'Весь downstream WIP полностью блокирует очередь разработки' },
   realistic: { label: 'Реалистичный', hint: 'Downstream WIP считается частично уже обработанным' },
@@ -158,57 +164,53 @@ export function MonteCarlo({ issues, tpWeeks, ctValues, queuePreset }: Props) {
     setQueueItems((p) => p.map((x, j) => (j === i ? v : x)));
 
   return (
-    <div className="bg-white rounded-3xl p-6 mb-6 shadow-donezo border border-gray-100">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
-        <div>
-          <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Прогноз (Monte Carlo)</div>
-          <div className="text-xs text-gray-400">{MODE_META[mode].hint}</div>
-        </div>
-        <div className="flex bg-gray-100 rounded-xl p-1 gap-0.5">
+    <SectionCard title="Прогнозирование (Monte Carlo)" description={MODE_META[mode].hint} className="rounded-xl">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <ToggleGroup
+          type="single"
+          value={mode}
+          onValueChange={(value) => {
+            if (value === 'items' || value === 'date' || value === 'queue') switchMode(value);
+          }}
+          className="w-fit flex-wrap justify-start rounded-lg bg-muted p-1"
+          size="sm"
+        >
           {(['items', 'date', 'queue'] as MCMode[]).map((m) => (
-            <button
-              key={m}
-              className={`px-4 py-1.5 rounded-md text-sm font-bold cursor-pointer border-none transition-all duration-200 whitespace-nowrap ${
-                mode === m ? 'bg-white text-donezo-dark shadow-sm' : 'bg-transparent text-gray-500 hover:text-gray-900'
-              }`}
-              onClick={() => switchMode(m)}
-            >
+            <ToggleGroupItem key={m} value={m} aria-label={MODE_META[m].label} className="px-4 text-sm font-semibold">
               {MODE_META[m].label}
-            </button>
+            </ToggleGroupItem>
           ))}
-        </div>
+        </ToggleGroup>
       </div>
 
-      {/* Items / Date modes */}
       {mode !== 'queue' && (
         <div className="flex flex-col gap-5">
           <div className="flex items-end gap-3">
             {mode === 'items' ? (
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">Задач нужно завершить</label>
-                <input
+                <Label className="mb-2 block">Задач нужно завершить</Label>
+                <Input
                   type="number" min={1} value={itemCount}
-                  className={`${inputCls} w-40 no-spinner`}
+                  className="w-40 no-spinner"
                   onChange={(e) => setItemCount(Number(e.target.value))}
                 />
               </div>
             ) : (
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">Целевая дата</label>
-                <input type="date" value={targetDate} className={`${inputCls} w-40`} onChange={(e) => setTargetDate(e.target.value)} />
+                <Label className="mb-2 block">Целевая дата</Label>
+                <Input type="date" value={targetDate} className="w-40" onChange={(e) => setTargetDate(e.target.value)} />
               </div>
             )}
-            <button className={btnPrimary} onClick={run}>Рассчитать</button>
+            <Button onClick={run}>Рассчитать</Button>
           </div>
 
           {error && (
-            <div className="text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>
+            <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>
           )}
 
           {result && (
             <>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 {([
                   { key: 'p50', label: 'P50', sub: 'вероятность 50%', v: result.p50 },
                   { key: 'p85', label: 'P85', sub: 'вероятность 85%', v: result.p85 },
@@ -216,8 +218,8 @@ export function MonteCarlo({ issues, tpWeeks, ctValues, queuePreset }: Props) {
                 ] as const).map(({ key, label, sub, v }) => {
                   const s = PCT_STYLES[key];
                   return (
-                    <div key={key} className={`p-5 rounded-2xl ${s.bg}`}>
-                      <div className={`text-sm font-extrabold uppercase tracking-widest mb-0.5 ${s.label}`}>{label}</div>
+                    <div key={key} className={`rounded-lg border border-border/60 p-5 ${s.bg}`}>
+                      <div className={`mb-0.5 text-sm font-extrabold uppercase ${s.label}`}>{label}</div>
                       <div className="text-xs text-gray-400 mb-3">{sub}</div>
                       {mode === 'items' ? (
                         <>
@@ -241,15 +243,13 @@ export function MonteCarlo({ issues, tpWeeks, ctValues, queuePreset }: Props) {
         </div>
       )}
 
-      {/* Queue mode */}
       {mode === 'queue' && (
         <div className="grid grid-cols-1 md:grid-cols-[360px_1fr] gap-6 min-h-[360px]">
-          {/* Left: input */}
           <div>
-            <div className="bg-gray-50 rounded-xl px-4 py-3.5 mb-4">
+            <div className="mb-4 rounded-lg bg-muted/60 px-4 py-3.5">
               <div className="flex items-center justify-between text-xs font-medium text-gray-500 mb-2">
                 <span>Текущий downstream WIP</span>
-                <span className="bg-slate-900 text-white text-sm font-bold px-2.5 py-0.5 rounded-full min-w-[32px] text-center">{wipCount}</span>
+                <Badge>{wipCount}</Badge>
               </div>
               <input
                 type="range" min={0} max={20} value={wipCount}
@@ -259,32 +259,37 @@ export function MonteCarlo({ issues, tpWeeks, ctValues, queuePreset }: Props) {
               <div className="flex justify-between text-xs text-gray-400 mt-1"><span>0</span><span>20</span></div>
               <div className="mt-3 flex items-center justify-between text-xs font-medium text-gray-500">
                 <span>Эффективный downstream WIP</span>
-                <span className="rounded-full bg-white px-2.5 py-0.5 text-sm font-bold text-donezo-dark shadow-sm">{fmtNum(effectiveWip)}</span>
+                <Badge variant="outline">{fmtNum(effectiveWip)}</Badge>
               </div>
             </div>
 
-            <div className="bg-white border border-gray-100 rounded-xl p-3.5 mb-4">
+            <div className="mb-4 rounded-lg border border-border bg-background p-3.5">
               <div className="text-xs font-semibold text-gray-500 mb-2">Режим расчёта</div>
-              <div className="flex flex-wrap gap-2">
+              <ToggleGroup
+                type="single"
+                value={queueMode}
+                onValueChange={(value) => {
+                  if (value === 'conservative' || value === 'realistic' || value === 'agingAware') setQueueMode(value);
+                }}
+                className="w-fit flex-wrap justify-start rounded-lg bg-muted p-1"
+                size="sm"
+              >
                 {(['conservative', 'realistic', 'agingAware'] as QueueForecastMode[]).map((value) => (
-                  <button
+                  <ToggleGroupItem
                     key={value}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all duration-200 ${
-                      queueMode === value
-                        ? 'bg-donezo-dark text-white shadow-sm'
-                        : 'bg-gray-100 text-gray-500 hover:text-gray-900'
-                    }`}
-                    onClick={() => setQueueMode(value)}
+                    value={value}
+                    aria-label={QUEUE_MODE_META[value].label}
+                    className="px-3 text-xs font-semibold"
                   >
                     {QUEUE_MODE_META[value].label}
-                  </button>
+                  </ToggleGroupItem>
                 ))}
-              </div>
+              </ToggleGroup>
               <div className="mt-2 text-xs text-gray-400 leading-relaxed">{QUEUE_MODE_META[queueMode].hint}</div>
             </div>
 
-            <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 mb-4">
-              <div className="text-xs font-semibold text-blue-900">Commitment point: `Готово к разработке`</div>
+            <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+              <div className="text-xs font-semibold text-blue-900">Точка обязательства (Commitment point): `Готово к разработке`</div>
               <div className="text-xs text-blue-700 mt-1 leading-relaxed">
                 Этот прогноз считает только delivery-часть потока: задачи уже готовы к входу в разработку и стоят в очереди на downstream.
               </div>
@@ -295,33 +300,31 @@ export function MonteCarlo({ issues, tpWeeks, ctValues, queuePreset }: Props) {
               {queueItems.map((item, idx) => (
                 <div key={idx} className="flex items-center gap-1.5">
                   <span className="text-xs font-bold text-gray-400 min-w-[20px] w-5 h-5 flex items-center justify-center bg-gray-100 rounded-full flex-shrink-0">{idx + 1}</span>
-                  <input
+                  <Input
                     type="text"
                     placeholder={`Задача ${idx + 1}`}
                     value={item}
                     onChange={(e) => updateQueueItem(idx, e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-100 bg-gray-50 rounded-xl text-sm font-semibold outline-none focus:bg-white focus:border-donezo-primary focus:ring-2 focus:ring-donezo-light transition-all duration-200"
+                    className="flex-1"
                   />
                   {queueItems.length > 1 && (
-                    <button
-                      className="w-6 h-6 border-none bg-gray-100 text-gray-400 rounded-md cursor-pointer flex items-center justify-center flex-shrink-0 hover:bg-red-50 hover:text-red-600 transition text-base"
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      className="size-6"
                       onClick={() => removeQueueItem(idx)}
-                    >×</button>
+                    >×</Button>
                   )}
                 </div>
               ))}
             </div>
             <div className="flex items-center gap-2.5">
-              <button
-                className="bg-transparent border border-dashed border-gray-300 rounded-full px-5 py-2 text-xs font-bold text-gray-500 cursor-pointer hover:border-donezo-primary hover:text-donezo-primary hover:-translate-y-0.5 transition-all duration-200"
-                onClick={addQueueItem}
-              >+ задача</button>
-              <button className={btnPrimary} onClick={run}>Рассчитать</button>
+              <Button variant="secondary" onClick={addQueueItem}>+ задача</Button>
+              <Button onClick={run}>Рассчитать</Button>
             </div>
-            {error && <div className="mt-2.5 text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
+            {error && <Alert variant="destructive" className="mt-2.5"><AlertDescription>{error}</AlertDescription></Alert>}
           </div>
 
-          {/* Right: results */}
           <div className="flex flex-col border-l border-gray-100 pl-6">
             {!queueResult ? (
               <div className="flex-1 flex flex-col items-center justify-center gap-2.5">
@@ -332,29 +335,29 @@ export function MonteCarlo({ issues, tpWeeks, ctValues, queuePreset }: Props) {
               </div>
             ) : (
               <>
-                <table className="w-full border-collapse text-sm">
-                  <thead>
-                    <tr>
-                      <th className="text-[10px] font-bold uppercase tracking-wider pb-3 pr-3 text-left border-b-2 border-gray-200 w-8 text-gray-400">#</th>
-                      <th className="text-[10px] font-bold uppercase tracking-wider pb-3 pr-3 text-left border-b-2 border-gray-200 text-gray-500">Задача</th>
-                      <th className="text-[10px] font-bold uppercase tracking-wider pb-3 pr-3 text-left border-b-2 border-gray-200 text-blue-600">P50</th>
-                      <th className="text-[10px] font-black uppercase tracking-wider pb-3 pr-3 text-left border-b-2 border-amber-300 text-amber-700 bg-amber-50/60">P85</th>
-                      <th className="text-[10px] font-bold uppercase tracking-wider pb-3 text-left border-b-2 border-gray-200 text-red-600">P95</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="w-8">#</TableHead>
+                      <TableHead>Задача</TableHead>
+                      <TableHead className="text-blue-600">P50</TableHead>
+                      <TableHead className="bg-amber-50/60 text-amber-700">P85</TableHead>
+                      <TableHead className="text-red-600">P95</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {queueResult.map((row, idx) => (
-                      <tr key={idx} className="border-b border-gray-50 last:border-none hover:bg-donezo-light/30 transition-colors duration-200 group">
-                        <td className="text-gray-400 text-xs font-bold text-center py-3.5 pr-3 align-middle group-hover:text-donezo-dark transition-colors">{idx + 1}</td>
-                        <td className="text-slate-900 font-bold py-3.5 pr-3 align-middle">{row.name}</td>
-                        <td className="text-blue-700 font-semibold whitespace-nowrap py-3.5 pr-3 align-middle">{fmtShort(row.p50)}</td>
-                        <td className="bg-amber-50/60 text-amber-800 font-extrabold whitespace-nowrap py-3.5 pr-3 align-middle">{fmtShort(row.p85)}</td>
-                        <td className="text-red-700 font-semibold whitespace-nowrap py-3.5 align-middle">{fmtShort(row.p95)}</td>
-                      </tr>
+                      <TableRow key={idx} className="group">
+                        <TableCell className="text-center text-xs font-bold text-gray-400 group-hover:text-slate-900">{idx + 1}</TableCell>
+                        <TableCell className="font-bold text-slate-900">{row.name}</TableCell>
+                        <TableCell className="whitespace-nowrap font-semibold text-blue-700">{fmtShort(row.p50)}</TableCell>
+                        <TableCell className="whitespace-nowrap bg-amber-50/60 font-extrabold text-amber-800">{fmtShort(row.p85)}</TableCell>
+                        <TableCell className="whitespace-nowrap font-semibold text-red-700">{fmtShort(row.p95)}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-                <div className="mt-4 rounded-2xl bg-gray-50 px-4 py-3">
+                  </TableBody>
+                </Table>
+                <div className="mt-4 rounded-lg bg-gray-50 px-4 py-3">
                   <div className="text-xs font-semibold text-gray-500">
                     P85 — рабочий срок планирования; P50 — оптимистичный сценарий; P95 — защитный хвост
                   </div>
@@ -367,6 +370,6 @@ export function MonteCarlo({ issues, tpWeeks, ctValues, queuePreset }: Props) {
           </div>
         </div>
       )}
-    </div>
+    </SectionCard>
   );
 }

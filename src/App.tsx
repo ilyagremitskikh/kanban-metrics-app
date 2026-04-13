@@ -1,33 +1,30 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 
-import { fetchIssues, fetchThroughputRaw } from './lib/api';
-import { percentile } from './lib/utils';
-import {
-  buildTableRows,
-  buildThroughputWeeks,
-  buildThroughputWeeksFromRaw,
-  getWipBuckets,
-  calcPredictabilityHistory,
-} from './lib/metrics';
-import { useLocalStorage } from './hooks/useLocalStorage';
-
 import { Settings as SettingsPanel } from './components/Settings';
 import { StatusBar } from './components/StatusBar';
 import { MetricCards } from './components/MetricCards';
 import { ScatterChart, ThroughputChart } from './components/Charts';
 import { MonteCarlo } from './components/MonteCarlo';
-import { PredictabilityWidget } from './components/PredictabilityWidget';
 import { AgingWIP } from './components/AgingWIP';
 import { IssuesTable } from './components/IssuesTable';
-import { RiceSection } from './components/RiceSection';
-import IssuesTab from './components/IssuesTab';
-
-import { fetchRiceIssues, refreshRiceIssues } from './lib/riceApi';
-import { fetchJiraIssues } from './lib/jiraApi';
-
-import type { Issue, ThroughputWeek, Settings as SettingsType, RiceIssue, JiraIssueShort } from './types';
+import { TasksSection } from './components/TasksSection';
+import { useLocalStorage } from './hooks/useLocalStorage';
+import { fetchIssues, fetchThroughputRaw } from './lib/api';
 import type { WebhookMeta } from './lib/apiClient';
+import { fetchJiraIssues } from './lib/jiraApi';
+import {
+  buildTableRows,
+  buildThroughputWeeks,
+  buildThroughputWeeksFromRaw,
+  getWipBuckets,
+} from './lib/metrics';
+import type { Issue, JiraIssueShort, RiceIssue, Settings as SettingsType, ThroughputWeek } from './types';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { EmptyState, PageContainer, PageShell, SectionCard, StatusHint } from '@/components/ui/admin';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const DEFAULT_SETTINGS: SettingsType = {
   n8nBaseUrl: '',
@@ -37,12 +34,12 @@ const DEFAULT_SETTINGS: SettingsType = {
 };
 
 const METRICS_TTL_MS = 10 * 60 * 1000;
-const RICE_TTL_MS = 5 * 60 * 1000;
-const ISSUES_TTL_MS = 5 * 60 * 1000;
+const TASKS_TTL_MS = 5 * 60 * 1000;
 
-type AppTab = 'metrics' | 'rice' | 'issues' | 'settings';
+type AppTab = 'metrics' | 'tasks' | 'settings';
+type TasksMode = 'edit' | 'score-tasks' | 'score-tickets';
 type StatusType = 'hidden' | 'info' | 'error' | 'success';
-type ResourceKey = 'metrics' | 'rice' | 'issues';
+type ResourceKey = 'metrics' | 'tasks';
 type ResourceStatus = 'idle' | 'loading' | 'success' | 'error';
 
 interface ResourceState {
@@ -65,8 +62,7 @@ const INITIAL_RESOURCE_STATE: ResourceState = {
 
 const TABS: { id: AppTab; label: string }[] = [
   { id: 'metrics', label: 'Метрики' },
-  { id: 'rice', label: 'Scoring' },
-  { id: 'issues', label: 'Задачи' },
+  { id: 'tasks', label: 'Задачи' },
   { id: 'settings', label: 'Настройки' },
 ];
 
@@ -75,11 +71,15 @@ function migrateSettings(raw: unknown): SettingsType {
   const s = raw as Record<string, unknown>;
   let n8nBaseUrl = typeof s.n8nBaseUrl === 'string' ? s.n8nBaseUrl : '';
   if (!n8nBaseUrl && typeof s.webhookUrl === 'string' && s.webhookUrl) {
-    try { n8nBaseUrl = new URL(s.webhookUrl).origin; } catch { /* ignore */ }
+    try {
+      n8nBaseUrl = new URL(s.webhookUrl).origin;
+    } catch {
+      // ignore legacy invalid value
+    }
   }
   return {
     n8nBaseUrl,
-    mode: (s.mode === 'standard' || s.mode === 'custom') ? s.mode : 'standard',
+    mode: s.mode === 'standard' || s.mode === 'custom' ? s.mode : 'standard',
     projectKey: typeof s.projectKey === 'string' ? s.projectKey : '',
     customJql: typeof s.customJql === 'string' ? s.customJql : '',
   };
@@ -114,10 +114,48 @@ function getResourceHint(state: ResourceState): { text: string; tone: 'neutral' 
   return lastUpdated ? { text: lastUpdated, tone: 'neutral' } : null;
 }
 
-function hintClass(tone: 'neutral' | 'info' | 'error'): string {
-  if (tone === 'error') return 'bg-red-50 text-red-700 border-red-200';
-  if (tone === 'info') return 'bg-blue-50 text-blue-700 border-blue-200';
-  return 'bg-gray-50 text-gray-500 border-gray-200';
+function mapHintTone(tone: 'neutral' | 'info' | 'error'): 'neutral' | 'info' | 'error' {
+  return tone;
+}
+
+function MetricChartCard({
+  title,
+  children,
+  className,
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <SectionCard title={title} className={className ?? 'rounded-xl'}>
+      {children}
+    </SectionCard>
+  );
+}
+
+function mapJiraIssueToRiceIssue(issue: JiraIssueShort): RiceIssue {
+  return {
+    key: issue.key,
+    summary: issue.summary,
+    issue_type: issue.issuetype,
+    labels: Array.isArray(issue.labels) ? issue.labels.join(', ') : '',
+    priority: issue.priority,
+    status: issue.status,
+    reach: issue.reach ?? null,
+    impact: issue.impact ?? null,
+    confidence: issue.confidence ?? null,
+    effort: issue.effort ?? null,
+    rice_score: issue.rice_score ?? null,
+    bug_risk: issue.bug_risk ?? null,
+    bug_process: issue.bug_process ?? null,
+    bug_scale: issue.bug_scale ?? null,
+    bug_workaround: issue.bug_workaround ?? null,
+    bug_score: issue.bug_score ?? null,
+    td_impact: issue.td_impact ?? null,
+    td_effort: issue.td_effort ?? null,
+    td_roi: issue.td_roi ?? null,
+  };
 }
 
 export default function App() {
@@ -131,12 +169,12 @@ export default function App() {
   const [status, setStatus] = useState<{ msg: string; type: StatusType }>({ msg: '', type: 'hidden' });
   const [riceIssues, setRiceIssues] = useState<RiceIssue[]>([]);
   const [jiraIssues, setJiraIssues] = useState<JiraIssueShort[]>([]);
+  const [tasksMode, setTasksMode] = useState<TasksMode>('edit');
   const [tpWeeksRaw, setTpWeeksRaw] = useState<ThroughputWeek[] | null>(null);
   const [riceDirty, setRiceDirty] = useState(false);
   const [resourceStates, setResourceStates] = useState<Record<ResourceKey, ResourceState>>({
     metrics: INITIAL_RESOURCE_STATE,
-    rice: INITIAL_RESOURCE_STATE,
-    issues: INITIAL_RESOURCE_STATE,
+    tasks: INITIAL_RESOURCE_STATE,
   });
   const previousBaseUrlRef = useRef(settings.n8nBaseUrl);
   const previousMetricsQueryRef = useRef(`${settings.mode}:${settings.projectKey}:${settings.customJql}`);
@@ -183,6 +221,7 @@ export default function App() {
 
   const metricsLoading = resourceStates.metrics.status === 'loading' || resourceStates.metrics.isRefreshing;
 
+  /* eslint-disable react-hooks/set-state-in-effect -- Existing cache reset/load effects intentionally synchronize local resource state. */
   useEffect(() => {
     if (previousBaseUrlRef.current !== settings.n8nBaseUrl) {
       previousBaseUrlRef.current = settings.n8nBaseUrl;
@@ -190,12 +229,10 @@ export default function App() {
       setRiceIssues([]);
       setJiraIssues([]);
       setTpWeeksRaw(null);
-      setResourceStates((prev) => ({
-        ...prev,
+      setResourceStates({
         metrics: INITIAL_RESOURCE_STATE,
-        rice: INITIAL_RESOURCE_STATE,
-        issues: INITIAL_RESOURCE_STATE,
-      }));
+        tasks: INITIAL_RESOURCE_STATE,
+      });
       setRiceDirty(false);
     }
   }, [settings.n8nBaseUrl]);
@@ -266,60 +303,26 @@ export default function App() {
     }
   };
 
-  const loadRiceSnapshot = async (force = false) => {
+  const loadTasks = async (force = false, allowDirty = false) => {
     if (!baseUrlReady) {
-      failLoad('rice', 'Укажите n8n URL в настройках');
+      failLoad('tasks', 'Укажите n8n URL в настройках');
       return;
     }
-    const current = resourceStates.rice;
+    const current = resourceStates.tasks;
     if (!force && current.hasEverLoaded && !isExpired(current)) return;
-    if (!force && riceDirty) return;
-
-    beginLoad('rice');
-    try {
-      const loaded = await fetchRiceIssues(settings.n8nBaseUrl);
-      setRiceIssues(loaded.issues);
-      completeLoad('rice', RICE_TTL_MS, loaded.meta);
-    } catch (err) {
-      failLoad('rice', `Ошибка: ${(err as Error).message}`);
-    }
-  };
-
-  const refreshRiceFromJira = async () => {
-    if (!baseUrlReady) {
-      failLoad('rice', 'Укажите n8n URL в настройках');
-      return;
-    }
-    if (riceDirty) {
-      failLoad('rice', 'Сначала сохраните оценки, потом обновите данные из Jira.');
+    if (riceDirty && !allowDirty) {
+      failLoad('tasks', 'Сначала сохраните оценки, потом обновите данные из Jira.');
       return;
     }
 
-    beginLoad('rice');
-    try {
-      const loaded = await refreshRiceIssues(settings.n8nBaseUrl);
-      setRiceIssues(loaded.issues);
-      completeLoad('rice', RICE_TTL_MS, loaded.meta);
-    } catch (err) {
-      failLoad('rice', `Ошибка: ${(err as Error).message}`);
-    }
-  };
-
-  const loadIssuesList = async (force = false) => {
-    if (!baseUrlReady) {
-      failLoad('issues', 'Укажите n8n URL в настройках');
-      return;
-    }
-    const current = resourceStates.issues;
-    if (!force && current.hasEverLoaded && !isExpired(current)) return;
-
-    beginLoad('issues');
+    beginLoad('tasks');
     try {
       const loaded = await fetchJiraIssues(settings.n8nBaseUrl);
       setJiraIssues(loaded.issues);
-      completeLoad('issues', ISSUES_TTL_MS, loaded.meta);
+      setRiceIssues(loaded.issues.map(mapJiraIssueToRiceIssue));
+      completeLoad('tasks', TASKS_TTL_MS, loaded.meta);
     } catch (err) {
-      failLoad('issues', `Ошибка: ${(err as Error).message}`);
+      failLoad('tasks', `Ошибка: ${(err as Error).message}`);
     }
   };
 
@@ -327,13 +330,11 @@ export default function App() {
     if (activeTab === 'metrics' && metricsReady) {
       void loadMetrics(false, false);
     }
-    if (activeTab === 'rice' && baseUrlReady && !riceDirty) {
-      void loadRiceSnapshot(false);
-    }
-    if (activeTab === 'issues' && baseUrlReady) {
-      void loadIssuesList(false);
+    if (activeTab === 'tasks' && baseUrlReady) {
+      void loadTasks(false);
     }
   }, [activeTab, metricsReady, baseUrlReady, riceDirty]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const tableRows = resourceStates.metrics.hasEverLoaded ? buildTableRows(metricsIssues) : [];
   const ltValues = tableRows.filter((r) => r.leadTime !== null).map((r) => r.leadTime as number);
@@ -345,8 +346,7 @@ export default function App() {
   const completedTotal = tableRows.filter((r) => r.completedAt !== null).length;
 
   const metricsHint = getResourceHint(resourceStates.metrics);
-  const riceHint = getResourceHint(resourceStates.rice);
-  const issuesHint = getResourceHint(resourceStates.issues);
+  const tasksHint = getResourceHint(resourceStates.tasks);
   const riceRefreshBlocked = riceDirty;
 
   const metricsRefreshLabel = metricsLoading
@@ -360,65 +360,29 @@ export default function App() {
   }, [metricsLoading, metricsReady]);
 
   return (
-    <div className="min-h-screen bg-donezo-bg font-sans p-4 md:p-6 lg:p-8 flex items-center justify-center">
-      <div className="max-w-[1500px] w-full bg-donezo-bg flex flex-col gap-6">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-donezo-dark flex items-center justify-center text-white font-bold text-2xl shadow-sm">
-              KM
-            </div>
-            <div>
-              <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight leading-none">Kanban Metrics</h1>
-              <div className="text-xs text-gray-500 mt-1.5 tracking-wider font-semibold uppercase">
-                Analytics &nbsp;•&nbsp; Scoring
-              </div>
-            </div>
-          </div>
+    <PageShell>
+      <PageContainer>
+        <StatusBar message={status.msg} type={status.type} />
 
-          <div className="flex bg-white rounded-full p-1.5 shadow-donezo border border-gray-100">
-            {TABS.map(({ id, label }) => (
-              <button
-                key={id}
-                className={`flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-full cursor-pointer transition-all whitespace-nowrap ${
-                  activeTab === id
-                    ? 'bg-donezo-dark text-white shadow-md transform scale-[1.02]'
-                    : 'bg-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                }`}
-                onClick={() => setActiveTab(id)}
-              >
-                {label}
-                {id === 'metrics' && resourceStates.metrics.hasEverLoaded && (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full leading-none flex items-center justify-center ${
-                    activeTab === id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {metricsIssues.length}
-                  </span>
-                )}
-                {id === 'rice' && resourceStates.rice.hasEverLoaded && riceIssues.length > 0 && (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full leading-none flex items-center justify-center ${
-                    activeTab === id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {riceIssues.length}
-                  </span>
-                )}
-                {id === 'issues' && resourceStates.issues.hasEverLoaded && jiraIssues.length > 0 && (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full leading-none flex items-center justify-center ${
-                    activeTab === id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {jiraIssues.length}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AppTab)} className="gap-4">
+          <TabsList className="h-auto w-fit flex-wrap">
+            {TABS.map(({ id, label }) => {
+              const count = id === 'metrics'
+                ? (resourceStates.metrics.hasEverLoaded ? metricsIssues.length : null)
+                : id === 'tasks'
+                  ? (resourceStates.tasks.hasEverLoaded && jiraIssues.length > 0 ? jiraIssues.length : null)
+                  : null;
 
-        <div className="w-full">
-          <StatusBar message={status.msg} type={status.type} />
-        </div>
+              return (
+                <TabsTrigger key={id} value={id}>
+                  {label}
+                  {count !== null ? <Badge variant={activeTab === id ? 'default' : 'secondary'}>{count}</Badge> : null}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
 
-        <div className="bg-white rounded-[32px] p-6 shadow-donezo border border-gray-100/50 min-h-[70vh]">
-          {activeTab === 'settings' && (
+          <TabsContent value="settings">
             <SettingsPanel
               settings={settings}
               onChange={updateSettings}
@@ -426,38 +390,25 @@ export default function App() {
               loading={metricsLoading}
               loadingLabel={metricsRefreshLabel}
             />
-          )}
+          </TabsContent>
 
-          {activeTab === 'metrics' && (
-            <>
-              <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
-                <div>
-                  <div className="text-lg font-bold text-slate-900">Метрики потока</div>
-                  {metricsHint && (
-                    <div className={`mt-2 inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${hintClass(metricsHint.tone)}`}>
-                      {metricsHint.text}
-                    </div>
-                  )}
+          <TabsContent value="metrics">
+            <SectionCard
+              title="Метрики потока"
+              description="Дашборд по времени доставки, скорости завершения, работе в процессе и прогнозированию."
+              action={
+                <div className="flex items-center gap-2">
+                  {metricsHint ? <StatusHint tone={mapHintTone(metricsHint.tone)}>{metricsHint.text}</StatusHint> : null}
+                  <Button variant="secondary" onClick={() => void loadMetrics(true, false)} disabled={metricsLoading || !metricsReady}>
+                    {metricsRefreshLabel}
+                  </Button>
                 </div>
-                <button
-                  className="px-6 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-full text-sm font-bold cursor-pointer transition-all duration-200 hover:bg-donezo-light hover:text-donezo-dark hover:border-donezo-primary hover:-translate-y-0.5 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none shadow-sm"
-                  onClick={() => void loadMetrics(true, false)}
-                  disabled={metricsLoading || !metricsReady}
-                >
-                  {metricsRefreshLabel}
-                </button>
-              </div>
-
+              }
+            >
               {!resourceStates.metrics.hasEverLoaded ? (
-                <div className="text-center py-24 px-6">
-                  <div className="text-6xl mb-5 opacity-30">📊</div>
-                  <div className="text-xl font-semibold text-gray-700 mb-2">Данные не загружены</div>
-                  <div className="text-sm text-gray-400">
-                    {metricsEmptyState}
-                  </div>
-                </div>
+                <EmptyState title="Данные не загружены" description={metricsEmptyState} icon={<span className="text-4xl">📊</span>} />
               ) : (
-                <>
+                <div className="flex flex-col gap-6">
                   <MetricCards
                     ltValues={ltValues}
                     ctValues={ctValues}
@@ -467,94 +418,82 @@ export default function App() {
                     completedTotal={completedTotal}
                   />
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-[400px]">
-                      <h3 className="text-sm font-bold text-gray-700 mb-4">Lead Time по задачам (scatter)</h3>
-                      <ScatterChart id="lt" rows={tableRows} field="leadTime" color="#1e5138" values={ltValues} />
-                    </div>
-                    <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-[400px]">
-                      <h3 className="text-sm font-bold text-gray-700 mb-4">Dev Cycle Time по задачам (scatter)</h3>
-                      <ScatterChart id="ct" rows={tableRows} field="devCycleTime" color="#2c7a51" values={ctValues} />
-                    </div>
-                    <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-[400px]">
-                      <h3 className="text-sm font-bold text-gray-700 mb-4">Upstream Time по задачам (scatter)</h3>
-                      <ScatterChart id="upstream" rows={tableRows} field="upstreamTime" color="#7c3aed" values={upstreamValues} />
-                    </div>
-                    <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-[400px]">
-                      <h3 className="text-sm font-bold text-gray-700 mb-4 text-center">Throughput (задач / неделю)</h3>
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-6">
+                    <MetricChartCard title="Время доставки (Lead Time)" className="xl:col-span-3">
+                      <ScatterChart id="lt" rows={tableRows} field="leadTime" color="#0f172a" values={ltValues} />
+                    </MetricChartCard>
+                    <MetricChartCard title="Время разработки (Downstream CT)" className="xl:col-span-3">
+                      <ScatterChart id="ct" rows={tableRows} field="devCycleTime" color="#0f766e" values={ctValues} />
+                    </MetricChartCard>
+                    <MetricChartCard title="Время подготовки (Upstream CT)" className="xl:col-span-2">
+                      <ScatterChart id="upstream" rows={tableRows} field="upstreamTime" color="#475569" values={upstreamValues} />
+                    </MetricChartCard>
+                    <MetricChartCard title="Скорость завершения (Throughput)" className="xl:col-span-4">
                       <ThroughputChart weeks={tpWeeks} />
-                    </div>
-                    <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-[400px]">
-                      <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center justify-center gap-1.5">
-                        Процент прогнозируемости
-                      </h3>
-                      <PredictabilityWidget data={calcPredictabilityHistory(tableRows, percentile(ctValues, 85), 12)} />
-                    </div>
+                    </MetricChartCard>
                   </div>
 
                   <MonteCarlo issues={metricsIssues} tpWeeks={tpWeeks} ctValues={ctValues} queuePreset={queuePreset} />
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-auto overflow-hidden">
-                      <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-1.5">
-                        Upstream Aging WIP{' '}
-                        <span className="metric-tooltip">
-                          ℹ<span className="tooltip-text">
-                            Задачи в аналитике/подготовке. Возраст считается с первого входа в Upstream. Пороги — по Upstream Time P50/P85.
-                          </span>
-                        </span>
-                      </h3>
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                    <SectionCard
+                      title="Старение подготовки (Upstream Aging WIP)"
+                      className="rounded-xl"
+                      action={
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" type="button">ℹ</Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Задачи в аналитике/подготовке. Возраст считается с первого входа в Upstream. Пороги — по Upstream Time P50/P85.</TooltipContent>
+                        </Tooltip>
+                      }
+                    >
                       <AgingWIP issues={metricsIssues} bucket="upstream" thresholdValues={upstreamValues} />
-                    </div>
-                    <div className="bg-white rounded-3xl p-6 shadow-donezo border border-gray-100 flex flex-col h-auto overflow-hidden">
-                      <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-1.5">
-                        Downstream Aging WIP{' '}
-                        <span className="metric-tooltip">
-                          ℹ<span className="tooltip-text">
-                            Задачи в разработке/тестировании/релизе. Возраст считается с первого входа в Downstream. Пороги — по Dev Cycle Time P50/P85.
-                          </span>
-                        </span>
-                      </h3>
+                    </SectionCard>
+                    <SectionCard
+                      title="Старение разработки (Downstream Aging WIP)"
+                      className="rounded-xl"
+                      action={
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" type="button">ℹ</Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Задачи в разработке/тестировании/релизе. Возраст считается с первого входа в Downstream. Пороги — по Dev Cycle Time P50/P85.</TooltipContent>
+                        </Tooltip>
+                      }
+                    >
                       <AgingWIP issues={metricsIssues} bucket="downstream" thresholdValues={ctValues} />
-                    </div>
+                    </SectionCard>
                   </div>
 
                   <IssuesTable rows={tableRows} />
-                </>
+                </div>
               )}
-            </>
-          )}
+            </SectionCard>
+          </TabsContent>
 
-          <div className={activeTab === 'rice' ? 'block' : 'hidden'}>
-            <RiceSection
+          <TabsContent value="tasks">
+            <TasksSection
               n8nBaseUrl={settings.n8nBaseUrl}
-              issues={riceIssues}
-              loading={resourceStates.rice.status === 'loading'}
-              refreshing={resourceStates.rice.isRefreshing}
-              error={resourceStates.rice.error}
-              lastUpdatedText={riceHint && riceHint.tone !== 'error' ? riceHint.text : null}
-              onRefreshFromJira={() => void refreshRiceFromJira()}
+              issues={jiraIssues}
+              scoringIssues={riceIssues}
+              mode={tasksMode}
+              onModeChange={setTasksMode}
+              loading={resourceStates.tasks.status === 'loading'}
+              refreshing={resourceStates.tasks.isRefreshing}
+              error={resourceStates.tasks.error}
+              lastUpdatedText={tasksHint && tasksHint.tone !== 'error' ? tasksHint.text : null}
+              onRefresh={() => void loadTasks(true)}
+              onScoringSaved={() => void loadTasks(true, true)}
               refreshBlocked={riceRefreshBlocked}
               refreshBlockedReason="Сначала сохраните оценки, потом обновите данные из Jira."
               onSendToQueue={(items) => setQueuePreset(items)}
               onSwitchToMetrics={() => setActiveTab('metrics')}
               onDirtyChange={setRiceDirty}
             />
-          </div>
-
-          {activeTab === 'issues' && (
-            <IssuesTab
-              n8nBaseUrl={settings.n8nBaseUrl}
-              issues={jiraIssues}
-              loading={resourceStates.issues.status === 'loading'}
-              refreshing={resourceStates.issues.isRefreshing}
-              error={resourceStates.issues.error}
-              lastUpdatedText={issuesHint && issuesHint.tone !== 'error' ? issuesHint.text : null}
-              onRefresh={() => void loadIssuesList(true)}
-            />
-          )}
-        </div>
-      </div>
-    </div>
+          </TabsContent>
+        </Tabs>
+      </PageContainer>
+    </PageShell>
   );
 }

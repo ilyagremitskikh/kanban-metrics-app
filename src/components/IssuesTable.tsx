@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { fmtNum } from '../lib/utils';
-import type { TableRow, SortState, SortCol } from '../types';
+import type { TableRow as MetricsTableRow, SortState, SortCol } from '../types';
 import { JIRA_BASE_URL } from '../types';
 import { TypeBadge, StatusBadge } from './Badges';
+import { SectionCard } from '@/components/ui/admin';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface Props {
-  rows: TableRow[];
+  rows: MetricsTableRow[];
 }
 
 export function IssuesTable({ rows }: Props) {
@@ -33,76 +36,73 @@ export function IssuesTable({ rows }: Props) {
     return dir * String(va).localeCompare(String(vb), 'ru');
   });
 
-  const thCls = 'text-left px-3 py-3.5 bg-gray-50/50 text-xs font-bold text-gray-400 uppercase tracking-wider border-b-2 border-gray-100 cursor-pointer select-none whitespace-nowrap hover:bg-gray-100/50 transition-colors duration-200';
+  const thCls = 'cursor-pointer select-none whitespace-nowrap bg-muted/60 hover:bg-muted';
 
   const th = (col: SortCol, label: string, extraCls = '') => (
-    <th
+    <TableHead
       key={col}
       onClick={() => handleSort(col)}
-      className={`${thCls} ${extraCls} ${sort.col === col ? `sort-${sort.dir}` : ''}`}
+      className={cn(thCls, extraCls, sort.col === col ? `sort-${sort.dir}` : '')}
     >
       {label}
-    </th>
+    </TableHead>
   );
 
   return (
-    <div className="bg-white rounded-3xl shadow-none border border-gray-100 overflow-hidden mb-6 p-2">
-      <div className="px-5 py-4 border-b border-gray-50">
-        <h3 className="text-sm font-bold text-gray-700">Задачи ({rows.length})</h3>
-      </div>
+    <SectionCard title={`Задачи (${rows.length})`}>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr>
+        <Table className="border-collapse">
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
               {th('key', 'Ключ')}
               {th('summary', 'Название')}
               {th('type', 'Тип')}
-              {th('leadTime', 'Lead Time', 'text-right')}
-              {th('devCycleTime', 'Dev CT', 'text-right')}
-              {th('upstreamTime', 'Upstream', 'text-right')}
+              {th('leadTime', 'Время доставки', 'text-right')}
+              {th('devCycleTime', 'Время разработки', 'text-right')}
+              {th('upstreamTime', 'Время подготовки', 'text-right')}
               {th('currentStatus', 'Статус')}
               {th('completedAt', 'Завершена')}
-            </tr>
-          </thead>
-          <tbody>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {sorted.map((row) => (
-              <tr key={row.key} className="border-b border-gray-50 last:border-none hover:bg-donezo-light/30 transition-colors duration-200 group">
-                <td className="px-3 py-3.5 align-middle whitespace-nowrap">
+              <TableRow key={row.key} className="group">
+                <TableCell className="whitespace-nowrap">
                   <a
                     href={`${JIRA_BASE_URL}/${row.key}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-mono text-sm font-bold text-donezo-dark hover:text-donezo-primary hover:underline transition-colors"
+                    className="font-mono text-sm font-semibold text-foreground transition-colors hover:text-primary hover:underline"
                   >
                     {row.key}
                   </a>
-                </td>
-                <td className="px-3 py-3.5 align-middle text-gray-700 min-w-[200px] max-w-[500px] group-hover:text-donezo-dark transition-colors">
+                </TableCell>
+                <TableCell className="min-w-[200px] max-w-[500px] text-slate-700 transition-colors group-hover:text-foreground">
                   {row.summary}
-                </td>
-                <td className="px-3 py-3.5 align-middle">
+                </TableCell>
+                <TableCell>
                   <TypeBadge type={row.type} />
-                </td>
-                <td className="px-3 py-3.5 align-middle text-right font-bold text-gray-700 whitespace-nowrap group-hover:text-donezo-dark transition-colors">
-                  {row.leadTime !== null ? `${fmtNum(row.leadTime)} d.` : <span className="text-gray-300 font-normal">—</span>}
-                </td>
-                <td className="px-3 py-3.5 align-middle text-right font-bold text-gray-700 whitespace-nowrap group-hover:text-donezo-dark transition-colors">
-                  {row.devCycleTime !== null ? `${fmtNum(row.devCycleTime)} d.` : <span className="text-gray-300 font-normal">—</span>}
-                </td>
-                <td className="px-3 py-3.5 align-middle text-right font-bold text-gray-700 whitespace-nowrap group-hover:text-donezo-dark transition-colors">
-                  {row.upstreamTime !== null ? `${fmtNum(row.upstreamTime)} d.` : <span className="text-gray-300 font-normal">—</span>}
-                </td>
-                <td className="px-3 py-3.5 align-middle whitespace-nowrap">
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-right font-semibold text-slate-700 transition-colors group-hover:text-foreground">
+                  {row.leadTime !== null ? `${fmtNum(row.leadTime)} дн.` : <span className="font-normal text-slate-300">—</span>}
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-right font-semibold text-slate-700 transition-colors group-hover:text-foreground">
+                  {row.devCycleTime !== null ? `${fmtNum(row.devCycleTime)} дн.` : <span className="font-normal text-slate-300">—</span>}
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-right font-semibold text-slate-700 transition-colors group-hover:text-foreground">
+                  {row.upstreamTime !== null ? `${fmtNum(row.upstreamTime)} дн.` : <span className="font-normal text-slate-300">—</span>}
+                </TableCell>
+                <TableCell className="whitespace-nowrap">
                   <StatusBadge status={row.currentStatus} />
-                </td>
-                <td className="px-3 py-3.5 align-middle text-gray-500 whitespace-nowrap group-hover:text-donezo-dark transition-colors">
-                  {row.completedAt ? row.completedAt.toLocaleDateString('ru-RU') : <span className="text-gray-300">—</span>}
-                </td>
-              </tr>
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-muted-foreground transition-colors group-hover:text-foreground">
+                  {row.completedAt ? row.completedAt.toLocaleDateString('ru-RU') : <span className="text-slate-300">—</span>}
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
-    </div>
+    </SectionCard>
   );
 }

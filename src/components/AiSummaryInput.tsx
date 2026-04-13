@@ -2,6 +2,9 @@ import { useState, useRef } from 'react';
 import { Sparkles, Loader2, Undo2 } from 'lucide-react';
 import { aiOptimize } from '../lib/jiraApi';
 import type { OptimizeContext } from '../types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface Props {
   value: string;
@@ -55,36 +58,36 @@ export default function AiSummaryInput({
   return (
     <div className="flex flex-col gap-1">
       {label && (
-        <label className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
-          {label}
-        </label>
+        <Label className="mb-2 block">{label}</Label>
       )}
       <div className="relative">
-        <input
+        <Input
           type="text"
           value={value}
           onChange={e => onChange(e.target.value)}
           placeholder={placeholder}
           disabled={loading}
-          className={`w-full pr-10 py-3 px-4 bg-gray-50 border rounded-xl text-sm transition-all duration-200
+          className={`h-10 w-full bg-background px-3 pr-10 text-sm transition-all duration-200
             focus:bg-white focus:outline-none disabled:opacity-60
             ${highlighted
-              ? 'border-donezo-primary ring-2 ring-donezo-light bg-white'
-              : 'border-gray-100 focus:border-donezo-primary focus:ring-2 focus:ring-donezo-light'
+              ? 'border-blue-600 ring-2 ring-blue-100 bg-white'
+              : 'border-input focus:border-blue-600 focus:ring-2 focus:ring-blue-100'
             }`}
         />
-        <button
+        <Button
           type="button"
           onClick={handleOptimize}
           disabled={loading || !value.trim()}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-donezo-primary disabled:opacity-40 transition-colors duration-200"
+          variant="ghost"
+          size="icon"
+          className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600"
           title="Оптимизировать с ИИ"
         >
           {loading
             ? <Loader2 size={16} className="animate-spin" />
             : <Sparkles size={16} />
           }
-        </button>
+        </Button>
       </div>
 
       {error && (
@@ -92,14 +95,16 @@ export default function AiSummaryInput({
       )}
 
       {prevValue.current !== null && !loading && (
-        <button
+        <Button
           type="button"
           onClick={handleUndo}
-          className="flex items-center gap-1 text-xs text-gray-400 hover:text-donezo-primary transition-colors duration-200 self-start"
+          variant="ghost"
+          size="sm"
+          className="self-start px-0 text-xs text-gray-400 hover:text-blue-600"
         >
           <Undo2 size={12} />
           Отменить
-        </button>
+        </Button>
       )}
     </div>
   );

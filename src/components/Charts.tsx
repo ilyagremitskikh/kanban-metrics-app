@@ -3,6 +3,7 @@ import { Chart, registerables } from 'chart.js';
 import { percentile, fmtNum, fmtWeekLabel } from '../lib/utils';
 import type { TableRow, ThroughputWeek } from '../types';
 import { getTypeColor } from '../lib/issueTypes';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 Chart.register(...registerables);
 
@@ -19,6 +20,11 @@ interface ScatterProps {
 export function ScatterChart({ id, rows, field, color, values }: ScatterProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef  = useRef<Chart | null>(null);
+  const metricLabel = field === 'leadTime'
+    ? 'Время доставки'
+    : field === 'devCycleTime'
+      ? 'Время разработки'
+      : 'Время подготовки';
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -61,7 +67,7 @@ export function ScatterChart({ id, rows, field, color, values }: ScatterProps) {
       data: {
         datasets: [
           {
-            label: field === 'leadTime' ? 'Lead Time' : field === 'devCycleTime' ? 'Dev Cycle Time' : 'Upstream Time',
+            label: metricLabel,
             data: points,
             backgroundColor: color + 'aa',
             borderColor: color,
@@ -69,9 +75,9 @@ export function ScatterChart({ id, rows, field, color, values }: ScatterProps) {
             pointRadius: 5,
             pointHoverRadius: 7,
           },
-          makeLine(p50, `P50: ${fmtNum(p50)}d.`, '#6b7280', [3, 3]),
-          makeLine(p85, `P85: ${fmtNum(p85)}d.`, '#f59e0b', [4, 4]),
-          makeLine(p95, `P95: ${fmtNum(p95)}d.`, '#ef4444', [4, 4]),
+          makeLine(p50, `P50: ${fmtNum(p50)} дн.`, '#6b7280', [3, 3]),
+          makeLine(p85, `P85: ${fmtNum(p85)} дн.`, '#f59e0b', [4, 4]),
+          makeLine(p95, `P95: ${fmtNum(p95)} дн.`, '#ef4444', [4, 4]),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ].filter(Boolean) as any[],
       },
@@ -87,7 +93,7 @@ export function ScatterChart({ id, rows, field, color, values }: ScatterProps) {
               label: (item) => {
                 const raw = item.raw as { key: string; summary: string };
                 const y   = item.parsed.y ?? 0;
-                return `${raw.key}: ${y.toFixed(1)} d. — ${raw.summary.slice(0, 50)}`;
+                return `${raw.key}: ${y.toFixed(1)} дн. — ${raw.summary.slice(0, 50)}`;
               },
             },
           },
@@ -102,11 +108,11 @@ export function ScatterChart({ id, rows, field, color, values }: ScatterProps) {
             },
             grid: { color: '#f3f4f6' },
           },
-          y: { title: { display: true, text: 'Days', font: { size: 11 } }, min: 0, grid: { color: '#f3f4f6' } },
+          y: { title: { display: true, text: 'Дни', font: { size: 11 } }, min: 0, grid: { color: '#f3f4f6' } },
         },
       },
     });
-  }, [rows, field, color, values, id]);
+  }, [rows, field, color, values, id, metricLabel]);
 
   useEffect(() => () => { chartRef.current?.destroy(); }, []);
 
@@ -149,7 +155,7 @@ export function ThroughputChart({ weeks }: { weeks: ThroughputWeek[] }) {
       }));
     } else {
       datasets = [{
-        label: 'Задач выполнено',
+        label: 'Завершено за неделю',
         data: weeks.map((w) => w.count),
         backgroundColor: '#10b981aa',
         borderColor: '#10b981',
@@ -177,30 +183,22 @@ export function ThroughputChart({ weeks }: { weeks: ThroughputWeek[] }) {
   useEffect(() => () => { chartRef.current?.destroy(); }, []);
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setGroupMode('byType')}
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-            groupMode === 'byType'
-              ? 'bg-donezo-dark text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
+      <ToggleGroup
+        type="single"
+        value={groupMode}
+        onValueChange={(value) => {
+          if (value === 'byType' || value === 'byAssignee') setGroupMode(value);
+        }}
+        className="w-fit justify-start rounded-lg bg-muted p-1"
+        size="sm"
+      >
+        <ToggleGroupItem value="byType" aria-label="Группировать по типу задач" className="px-3 text-xs">
           По типу задач
-        </button>
-        <button
-          type="button"
-          onClick={() => setGroupMode('byAssignee')}
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-            groupMode === 'byAssignee'
-              ? 'bg-donezo-dark text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
+        </ToggleGroupItem>
+        <ToggleGroupItem value="byAssignee" aria-label="Группировать по исполнителю" className="px-3 text-xs">
           По исполнителю
-        </button>
-      </div>
+        </ToggleGroupItem>
+      </ToggleGroup>
       <div className="relative h-[260px]">
         <canvas ref={canvasRef} />
       </div>
