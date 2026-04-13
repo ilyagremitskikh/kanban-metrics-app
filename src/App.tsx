@@ -317,7 +317,7 @@ export default function App() {
 
     beginLoad('tasks');
     try {
-      const loaded = await fetchJiraIssues(settings.n8nBaseUrl);
+      const loaded = await fetchJiraIssues(settings.n8nBaseUrl, { forceRefresh: force });
       setJiraIssues(loaded.issues);
       setRiceIssues(loaded.issues.map(mapJiraIssueToRiceIssue));
       completeLoad('tasks', TASKS_TTL_MS, loaded.meta);
