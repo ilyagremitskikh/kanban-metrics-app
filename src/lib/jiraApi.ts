@@ -14,6 +14,30 @@ export interface JiraIssuesResponse {
   meta: WebhookMeta | null;
 }
 
+export interface JiraIssueScoringSaveResponse {
+  updated: string[];
+  created: string[];
+  skipped: Array<{ key: string; reason: string }>;
+  meta: WebhookMeta | null;
+}
+
+export interface JiraIssueScoringUpdate {
+  key: string;
+  reach: number | null;
+  impact: number | null;
+  confidence: number | null;
+  effort: number | null;
+  rice_score: number | null;
+  bug_risk: number | null;
+  bug_process: number | null;
+  bug_scale: number | null;
+  bug_workaround: number | null;
+  bug_score: number | null;
+  td_impact: number | null;
+  td_effort: number | null;
+  td_roi: number | null;
+}
+
 interface FetchJiraIssuesOptions {
   forceRefresh?: boolean;
 }
@@ -78,6 +102,43 @@ export async function updateJiraIssue(
       body: data,
     },
   );
+}
+
+export async function saveJiraIssueScores(
+  n8nBaseUrl: string,
+  updates: JiraIssueScoringUpdate[],
+): Promise<JiraIssueScoringSaveResponse> {
+  const data = await requestN8nJson<unknown>(n8nBaseUrl, WEBHOOK_PATHS.jiraIssueScoring, {
+    method: 'POST',
+    body: { updates },
+  });
+
+  const payload = (data && typeof data === 'object' ? data : {}) as {
+    updated?: unknown;
+    created?: unknown;
+    skipped?: unknown;
+  };
+
+  const toStringArray = (value: unknown): string[] => (
+    Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+  );
+
+  const skipped = Array.isArray(payload.skipped)
+    ? payload.skipped.flatMap((item) => {
+      if (!item || typeof item !== 'object') return [];
+      const key = typeof (item as { key?: unknown }).key === 'string' ? (item as { key: string }).key : '';
+      const reason = typeof (item as { reason?: unknown }).reason === 'string' ? (item as { reason: string }).reason : '';
+      if (!key) return [];
+      return [{ key, reason }];
+    })
+    : [];
+
+  return {
+    updated: toStringArray(payload.updated),
+    created: toStringArray(payload.created),
+    skipped,
+    meta: getOptionalMeta(data),
+  };
 }
 
 export async function aiGenerate(

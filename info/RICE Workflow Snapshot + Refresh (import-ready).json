@@ -1,9 +1,9 @@
 {
-  "name": "RICE Workflow Snapshot + Refresh",
+  "name": "DEPRECATED - RICE Workflow Snapshot + Refresh",
   "nodes": [
     {
       "parameters": {
-        "path": "rice-scoring",
+        "path": "deprecated/rice-scoring",
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
@@ -90,7 +90,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "rice-scoring-refresh",
+        "path": "deprecated/rice-scoring-refresh",
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
@@ -397,7 +397,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "rice-score-update",
+        "path": "deprecated/rice-score-update",
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
@@ -862,5 +862,6 @@
     "aiBuilderAssisted": true,
     "instanceId": "166a83f3b5979b833d91a82f993d0ab73b3eaf47ab8ca6dca2eb8a3d37458905"
   },
-  "tags": []
+  "tags": [],
+  "description": "Deprecated. App scoring moved to PM Helper Webhook Unified."
 }

@@ -1,6 +1,7 @@
 export const WEBHOOK_PATHS = {
   kanbanMetrics: '/webhook/kanban-metrics',
   jiraIssues: '/webhook/jira/issues',
+  jiraIssueScoring: '/webhook/jira/issues/scoring',
   throughput: '/webhook/throughput',
   riceScoring: '/webhook/rice-scoring',
   riceScoringRefresh: '/webhook/rice-scoring-refresh',

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { saveRiceScores, type RiceUpdate } from '../lib/riceApi';
+import {
+  saveJiraIssueScores,
+  type JiraIssueScoringSaveResponse,
+  type JiraIssueScoringUpdate,
+} from '../lib/jiraApi';
 import type { RiceIssue } from '../types';
 import {
   IssueKeyCell,
@@ -295,7 +299,7 @@ export function RiceSection({
   const save = async () => {
     setSaving(true); setMsg(null);
     try {
-      const updates = issues.flatMap((issue): RiceUpdate[] => {
+      const updates = issues.flatMap((issue): JiraIssueScoringUpdate[] => {
         if (!dirtyKeys.has(issue.key)) return [];
 
         if (issue.issue_type === 'Ошибка') {
@@ -330,10 +334,16 @@ export function RiceSection({
       });
 
       if (!updates.length) { setMsg({ text: 'Нет задач с корректно заполненными оценками для сохранения', ok: false }); return; }
-      await saveRiceScores(n8nBaseUrl, updates);
+      const result: JiraIssueScoringSaveResponse = await saveJiraIssueScores(n8nBaseUrl, updates);
+      const savedCount = result.updated.length + result.created.length;
       setDirtyKeys(new Set());
       onDirtyChange?.(false);
-      setMsg({ text: `Успешно сохранено ${updates.length} задач`, ok: true });
+      if (savedCount > 0) {
+        setMsg({ text: `Успешно сохранено ${savedCount} задач`, ok: true });
+      } else {
+        const skippedCount = result.skipped.length;
+        setMsg({ text: skippedCount > 0 ? `Сохранение пропущено для ${skippedCount} задач` : 'Изменений для сохранения не было', ok: false });
+      }
       onSaved?.();
     } catch (e) {
       setMsg({ text: `Ошибка при сохранении: ${(e as Error).message}`, ok: false });
