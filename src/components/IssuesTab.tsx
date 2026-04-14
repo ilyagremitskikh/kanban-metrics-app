@@ -22,6 +22,8 @@ interface Props {
   lastUpdatedText: string | null;
   onRefresh: () => void;
   embedded?: boolean;
+  allowCreate?: boolean;
+  listTitle?: string;
 }
 
 type IssuesViewMode = { mode: 'list' } | { mode: 'create' } | { mode: 'edit'; issueKey: string };
@@ -104,6 +106,8 @@ export default function IssuesTab({
   lastUpdatedText,
   onRefresh,
   embedded = false,
+  allowCreate = true,
+  listTitle = 'Задачи',
 }: Props) {
   const [viewMode, setViewMode] = useState<IssuesViewMode>({ mode: 'list' });
   const [sortField, setSortField] = useState<SortField>('key');
@@ -190,7 +194,14 @@ export default function IssuesTab({
           <span className="block text-[10px] font-normal normal-case tracking-normal text-muted-foreground">контекст задачи</span>
         </div>
       ),
-      cell: ({ row }) => <SummaryCell parent={row.original.parent}>{row.original.summary}</SummaryCell>,
+      cell: ({ row }) => (
+        <SummaryCell
+          epic={normalizeType(row.original.issuetype) === 'epic' ? null : row.original.epic}
+          parent={row.original.parent}
+        >
+          {row.original.summary}
+        </SummaryCell>
+      ),
     },
     {
       id: 'status',
@@ -287,7 +298,7 @@ export default function IssuesTab({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-muted/25 p-3">
         <div className="space-y-1">
-          {!embedded ? <h2 className="text-2xl font-semibold tracking-tight text-foreground">Задачи</h2> : null}
+          {!embedded ? <h2 className="text-2xl font-semibold tracking-tight text-foreground">{listTitle}</h2> : null}
           <div className="text-sm text-muted-foreground">
             {sortedIssues.length} {sortedIssues.length === 1 ? 'тикет' : sortedIssues.length < 5 ? 'тикета' : 'тикетов'} в общем списке
           </div>
@@ -301,10 +312,12 @@ export default function IssuesTab({
               <RefreshCw size={14} className={loading || refreshing ? 'animate-spin' : ''} />
             </Button>
           ) : null}
-          <Button onClick={() => setViewMode({ mode: 'create' })}>
-            <Plus size={16} />
-            Создать задачу
-          </Button>
+          {allowCreate ? (
+            <Button onClick={() => setViewMode({ mode: 'create' })}>
+              <Plus size={16} />
+              Создать задачу
+            </Button>
+          ) : null}
         </div>
       </div>
 

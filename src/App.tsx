@@ -38,7 +38,7 @@ const METRICS_TTL_MS = 10 * 60 * 1000;
 const TASKS_TTL_MS = 5 * 60 * 1000;
 
 type AppTab = 'metrics' | 'tasks' | 'settings';
-type TasksMode = 'edit' | 'priorities';
+type TasksMode = 'edit' | 'epics' | 'priorities';
 type StatusType = 'hidden' | 'info' | 'error' | 'success';
 type ResourceKey = 'metrics' | 'tasks';
 type ResourceStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -140,6 +140,9 @@ function mapJiraIssueToRiceIssue(issue: JiraIssueShort): RiceIssue {
     key: issue.key,
     summary: issue.summary,
     issue_type: issue.issuetype,
+    parent: issue.parent ?? null,
+    epic: issue.epic ?? null,
+    epic_key: issue.epic_key ?? null,
     labels: Array.isArray(issue.labels) ? issue.labels.join(', ') : '',
     priority: issue.priority,
     status: issue.status,

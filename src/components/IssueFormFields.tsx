@@ -3,7 +3,7 @@ import {
   X, Plus, Trash2, ChevronsUp, ChevronUp, Minus, ChevronDown, ChevronsDown,
   Sparkles, Loader2, Check, MinusCircle, Equal,
 } from 'lucide-react';
-import type { ChecklistItem } from '../types';
+import type { ChecklistItem, EpicIssueContext, ParentIssueContext } from '../types';
 import { aiChecklist } from '../lib/jiraApi';
 import { normalizePriority } from '../lib/priorities';
 import { Badge } from '@/components/ui/badge';
@@ -247,6 +247,8 @@ export interface ChecklistContext {
   issue_type: string;
   summary: string;
   description: string;
+  parent?: ParentIssueContext;
+  epic?: EpicIssueContext;
 }
 
 interface ChecklistEditorProps {
@@ -290,6 +292,8 @@ export function ChecklistEditor({ value, onChange, n8nBaseUrl, context }: Checkl
         issue_type: context.issue_type,
         summary: context.summary,
         description: context.description,
+        parent: context.parent,
+        epic: context.epic,
       });
       // Merge: append generated items after existing ones, re-ranking
       const merged = [

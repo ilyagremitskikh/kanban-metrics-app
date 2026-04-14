@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
-import { ChevronsDown } from 'lucide-react';
+import { ChevronsDown, Flag } from 'lucide-react';
 
 import { StatusBadge } from './Badges';
-import { JIRA_BASE_URL, type JiraIssueParent } from '../types';
+import { JIRA_BASE_URL, type JiraIssueEpic, type JiraIssueParent } from '../types';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -48,16 +48,27 @@ export function IssueKeyCell({
 export function SummaryCell({
   children,
   className,
+  epic,
   parent,
 }: {
   children: ReactNode;
   className?: string;
+  epic?: JiraIssueEpic | null;
   parent?: JiraIssueParent | null;
 }) {
   return (
     <span className={cn('block min-w-[240px] max-w-[34rem]', className)}>
+      {epic?.key ? (
+        <span className="mb-1 flex max-w-full items-center gap-1.5 text-[11px] font-medium leading-4 text-amber-700 transition-colors group-hover:text-amber-800">
+          <Flag size={12} className="shrink-0 text-amber-500" />
+          <span className="truncate">
+            <span className="font-mono font-semibold">{epic.key}</span>
+            {epic.summary ? ` · ${epic.summary}` : ''}
+          </span>
+        </span>
+      ) : null}
       {parent?.key ? (
-        <span className="mb-1 inline-flex max-w-full items-center gap-1.5 text-[11px] font-medium leading-4 text-slate-500 transition-colors group-hover:text-slate-700">
+        <span className="mb-1 flex max-w-full items-center gap-1.5 text-[11px] font-medium leading-4 text-slate-500 transition-colors group-hover:text-slate-700">
           <ChevronsDown size={12} className="shrink-0 text-blue-500" />
           <span className="truncate">
             <span className="font-mono font-semibold text-slate-600">{parent.key}</span>

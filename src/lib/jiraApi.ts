@@ -5,6 +5,8 @@ import type {
   UpdateIssueRequest,
   AiGenerateResponse,
   OptimizeContext,
+  ParentIssueContext,
+  EpicIssueContext,
 } from '../types';
 import { getArrayField, getOptionalMeta, requestN8nJson, WEBHOOK_PATHS, type WebhookMeta } from './apiClient';
 import { normalizeJiraIssue } from './apiNormalizers';
@@ -145,10 +147,11 @@ export async function aiGenerate(
   n8nBaseUrl: string,
   issueType: string,
   userPrompt: string,
+  context: { parent?: ParentIssueContext; epic?: EpicIssueContext } = {},
 ): Promise<AiGenerateResponse> {
   return requestN8nJson<AiGenerateResponse>(n8nBaseUrl, WEBHOOK_PATHS.aiGenerate, {
     method: 'POST',
-    body: { issue_type: issueType, user_prompt: userPrompt },
+    body: { issue_type: issueType, user_prompt: userPrompt, ...context },
   });
 }
 
@@ -168,6 +171,8 @@ export interface AiChecklistContext {
   issue_type: string;
   summary: string;
   description: string;
+  parent?: ParentIssueContext;
+  epic?: EpicIssueContext;
 }
 
 export async function aiChecklist(

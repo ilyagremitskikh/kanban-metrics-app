@@ -3,7 +3,7 @@ import { RefreshCw } from 'lucide-react';
 
 import IssuesTab from './IssuesTab';
 import { RiceSection } from './RiceSection';
-import type { JiraIssueShort, RiceIssue } from '../types';
+import type { JiraIssueEpic, JiraIssueShort, RiceIssue } from '../types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { SectionCard, StatusHint } from '@/components/ui/admin';
@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
-type TasksMode = 'edit' | 'priorities';
+type TasksMode = 'edit' | 'epics' | 'priorities';
 
 const MODE_COPY: Record<TasksMode, { label: string; description: string }> = {
   edit: {
@@ -22,7 +22,16 @@ const MODE_COPY: Record<TasksMode, { label: string; description: string }> = {
     label: 'Приоритеты',
     description: 'Единая панель приоритизации для задач, багов и техдолга.',
   },
+  epics: {
+    label: 'Эпики',
+    description: 'Эпики проекта: редактирование и создание вложенных тикетов.',
+  },
 };
+
+function isEpicType(issueType: string | null | undefined): boolean {
+  const normalized = (issueType ?? '').trim().toLowerCase();
+  return normalized === 'epic' || normalized === 'эпик';
+}
 
 function TasksSkeleton() {
   return (
@@ -87,9 +96,54 @@ export function TasksSection({
 }: Props) {
   const modeCopy = MODE_COPY[mode];
   const hasLoadedData = issues.length > 0 || scoringIssues.length > 0;
-  const issueParentByKey = useMemo(
-    () => Object.fromEntries(issues.map((issue) => [issue.key, issue.parent ?? null])),
+  const epicByKey = useMemo<Record<string, JiraIssueEpic>>(
+    () => Object.fromEntries(issues
+      .filter((issue) => isEpicType(issue.issuetype))
+      .map((issue) => [issue.key, {
+        key: issue.key,
+        summary: issue.summary,
+        status: issue.status,
+        priority: issue.priority,
+      }])),
     [issues],
+  );
+  const displayIssues = useMemo(() => {
+    const issuesWithDirectEpic = issues.map((issue) => {
+      if (isEpicType(issue.issuetype)) return { ...issue, epic: null, epic_key: null };
+      const directEpicKey = issue.epic?.key ?? issue.epic_key ?? null;
+      const epicFromList = directEpicKey ? epicByKey[directEpicKey] : null;
+      const directEpic = directEpicKey
+        ? {
+            key: directEpicKey,
+            summary: issue.epic?.summary || epicFromList?.summary,
+            status: issue.epic?.status || epicFromList?.status,
+            priority: issue.epic?.priority || epicFromList?.priority,
+          }
+        : null;
+      return { ...issue, epic: directEpic, epic_key: directEpic?.key ?? directEpicKey };
+    });
+    const issueByKey = Object.fromEntries(issuesWithDirectEpic.map((issue) => [issue.key, issue]));
+
+    return issuesWithDirectEpic.map((issue) => {
+      if (issue.epic || !issue.parent?.key || isEpicType(issue.issuetype)) return issue;
+      const parentIssue = issueByKey[issue.parent.key];
+      const parentEpic = isEpicType(parentIssue?.issuetype) ? epicByKey[issue.parent.key] : parentIssue?.epic ?? null;
+      return parentEpic ? { ...issue, epic: parentEpic, epic_key: parentEpic.key } : issue;
+    });
+  }, [epicByKey, issues]);
+  const editableIssues = useMemo(() => displayIssues.filter((issue) => !isEpicType(issue.issuetype)), [displayIssues]);
+  const epicIssues = useMemo(() => displayIssues.filter((issue) => isEpicType(issue.issuetype)), [displayIssues]);
+  const scoringDisplayIssues = useMemo(
+    () => scoringIssues.filter((issue) => !isEpicType(issue.issue_type)),
+    [scoringIssues],
+  );
+  const issueParentByKey = useMemo(
+    () => Object.fromEntries(displayIssues.map((issue) => [issue.key, issue.parent ?? null])),
+    [displayIssues],
+  );
+  const issueEpicByKey = useMemo(
+    () => Object.fromEntries(displayIssues.map((issue) => [issue.key, issue.epic ?? null])),
+    [displayIssues],
   );
 
   const handleRefresh = () => {
@@ -149,12 +203,28 @@ export function TasksSection({
         {(!loading || hasLoadedData) && mode === 'edit' ? (
           <IssuesTab
             n8nBaseUrl={n8nBaseUrl}
-            issues={issues}
+            issues={editableIssues}
             loading={loading}
             refreshing={refreshing}
             error={error}
             lastUpdatedText={null}
             onRefresh={onRefresh}
+            listTitle="Задачи"
+            embedded
+          />
+        ) : null}
+
+        {(!loading || hasLoadedData) && mode === 'epics' ? (
+          <IssuesTab
+            n8nBaseUrl={n8nBaseUrl}
+            issues={epicIssues}
+            loading={loading}
+            refreshing={refreshing}
+            error={error}
+            lastUpdatedText={null}
+            onRefresh={onRefresh}
+            allowCreate={false}
+            listTitle="Эпики"
             embedded
           />
         ) : null}
@@ -162,8 +232,9 @@ export function TasksSection({
         {(!loading || hasLoadedData) && mode === 'priorities' ? (
           <RiceSection
             n8nBaseUrl={n8nBaseUrl}
-            issues={scoringIssues}
+            issues={scoringDisplayIssues}
             issueParentByKey={issueParentByKey}
+            issueEpicByKey={issueEpicByKey}
             loading={loading}
             refreshing={refreshing}
             error={error}

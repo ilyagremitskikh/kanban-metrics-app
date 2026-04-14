@@ -5,7 +5,7 @@ import {
   type JiraIssueScoringSaveResponse,
   type JiraIssueScoringUpdate,
 } from '../lib/jiraApi';
-import type { JiraIssueParent, RiceIssue } from '../types';
+import type { JiraIssueEpic, JiraIssueParent, RiceIssue } from '../types';
 import {
   IssueKeyCell,
   StatusCell,
@@ -214,6 +214,7 @@ interface Props {
   n8nBaseUrl: string;
   issues: RiceIssue[];
   issueParentByKey?: Record<string, JiraIssueParent | null | undefined>;
+  issueEpicByKey?: Record<string, JiraIssueEpic | null | undefined>;
   loading: boolean;
   refreshing: boolean;
   error: string | null;
@@ -235,6 +236,7 @@ export function RiceSection({
   n8nBaseUrl,
   issues,
   issueParentByKey = {},
+  issueEpicByKey = {},
   loading,
   refreshing,
   error,
@@ -273,11 +275,15 @@ export function RiceSection({
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   const enrichedIssues = useMemo(
-    () => issues.map((issue) => ({
-      ...issue,
-      parent: issue.parent ?? issueParentByKey[issue.key] ?? null,
-    })),
-    [issueParentByKey, issues],
+    () => issues.map((issue) => {
+      const parent = issue.parent ?? issueParentByKey[issue.key] ?? null;
+      return {
+        ...issue,
+        parent,
+        epic: issue.epic ?? issueEpicByKey[issue.key] ?? (parent?.key ? issueEpicByKey[parent.key] : null) ?? null,
+      };
+    }),
+    [issueEpicByKey, issueParentByKey, issues],
   );
 
   useEffect(() => {
@@ -468,7 +474,7 @@ export function RiceSection({
     {
       id: 'summary',
       header: () => <HeaderLabel title="Summary" hint="контекст задачи" />,
-      cell: ({ row }) => <SummaryCell parent={row.original.parent}>{row.original.summary}</SummaryCell>,
+      cell: ({ row }) => <SummaryCell epic={row.original.epic} parent={row.original.parent}>{row.original.summary}</SummaryCell>,
     },
     {
       id: 'status',
@@ -594,7 +600,7 @@ export function RiceSection({
     {
       id: 'summary',
       header: () => <HeaderLabel title="Summary" hint="контекст дефекта" />,
-      cell: ({ row }) => <SummaryCell parent={row.original.parent}>{row.original.summary}</SummaryCell>,
+      cell: ({ row }) => <SummaryCell epic={row.original.epic} parent={row.original.parent}>{row.original.summary}</SummaryCell>,
     },
     {
       id: 'status',
@@ -681,7 +687,7 @@ export function RiceSection({
     {
       id: 'summary',
       header: () => <HeaderLabel title="Summary" hint="контекст долга" />,
-      cell: ({ row }) => <SummaryCell parent={row.original.parent}>{row.original.summary}</SummaryCell>,
+      cell: ({ row }) => <SummaryCell epic={row.original.epic} parent={row.original.parent}>{row.original.summary}</SummaryCell>,
     },
     {
       id: 'status',

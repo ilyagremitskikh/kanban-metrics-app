@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Sparkles, Loader2, Send } from 'lucide-react';
 import { aiGenerate, createJiraIssue } from '../lib/jiraApi';
-import type { ChecklistItem } from '../types';
+import type { ChecklistItem, EpicIssueContext, ParentIssueContext } from '../types';
 import { normalizePriority } from '../lib/priorities';
 import AiSummaryInput from './AiSummaryInput';
 import AiDescriptionDiff from './AiDescriptionDiff';
@@ -24,6 +24,10 @@ interface Props {
   fixedIssueType?: string;
   parentIssueKey?: string;
   parentIssueSummary?: string;
+  parentIssueContext?: ParentIssueContext;
+  epicIssueKey?: string;
+  epicIssueSummary?: string;
+  epicIssueContext?: EpicIssueContext;
 }
 
 export default function CreateIssueForm({
@@ -35,6 +39,10 @@ export default function CreateIssueForm({
   fixedIssueType,
   parentIssueKey,
   parentIssueSummary,
+  parentIssueContext,
+  epicIssueKey,
+  epicIssueSummary,
+  epicIssueContext,
 }: Props) {
   const issueTypes = availableTypes.length ? availableTypes : ['User Story'];
   const effectiveIssueTypes = fixedIssueType ? [fixedIssueType] : issueTypes;
@@ -64,7 +72,15 @@ export default function CreateIssueForm({
     setAiLoading(true);
     setAiError(null);
     try {
-      const result = await aiGenerate(n8nBaseUrl, aiIssueType, aiPrompt);
+      const result = await aiGenerate(
+        n8nBaseUrl,
+        aiIssueType,
+        aiPrompt,
+        {
+          ...(parentIssueContext ? { parent: parentIssueContext } : {}),
+          ...(epicIssueContext ? { epic: epicIssueContext } : {}),
+        },
+      );
       setSummary(result.summary ?? '');
       setDescription(result.description ?? '');
       setPriority(normalizePriority(result.priority ?? 'Medium'));
@@ -89,6 +105,7 @@ export default function CreateIssueForm({
         priority,
         issuetype,
         parent: parentIssueKey ? { key: parentIssueKey } : undefined,
+        epic: epicIssueKey ? { key: epicIssueKey } : undefined,
         needToUpdateSource: needToUpdateSource ? 'Да' : '',
         slService,
         productCatalog,
@@ -105,12 +122,20 @@ export default function CreateIssueForm({
   };
 
   const formDisabled = aiLoading || submitting;
+  const aiContext = {
+    issue_type: issuetype,
+    summary,
+    description,
+    ...(parentIssueContext ? { parent: parentIssueContext } : {}),
+    ...(epicIssueContext ? { epic: epicIssueContext } : {}),
+  };
+  const createMode = parentIssueKey ? 'subtask' : epicIssueKey ? 'epic-child' : 'issue';
 
   return (
     <form onSubmit={handleSubmit} className={cn('flex flex-col', layout === 'page' ? 'min-h-[70vh]' : 'h-full')}>
       <div className={cn('flex flex-1 flex-col gap-4 overflow-y-auto', layout === 'page' ? 'px-0 py-1' : 'px-6 py-5')}>
         <FormSection
-          title={parentIssueKey ? 'ИИ-черновик подзадачи' : 'ИИ-черновик'}
+          title={createMode === 'subtask' ? 'ИИ-черновик подзадачи' : createMode === 'epic-child' ? 'ИИ-черновик задачи в эпике' : 'ИИ-черновик'}
           className="border-blue-200 bg-blue-50/50"
         >
           <div className="flex flex-col gap-4">
@@ -120,6 +145,13 @@ export default function CreateIssueForm({
                   Создаём подзадачу типа <strong>{fixedIssueType}</strong>
                   {parentIssueKey ? ` для ${parentIssueKey}` : ''}.
                   {parentIssueSummary ? ` ${parentIssueSummary}` : ''}
+                </AlertDescription>
+              </Alert>
+            ) : epicIssueKey ? (
+              <Alert variant="info">
+                <AlertDescription>
+                  Создаём задачу в эпике <strong>{epicIssueKey}</strong>
+                  {epicIssueSummary ? ` · ${epicIssueSummary}` : ''}.
                 </AlertDescription>
               </Alert>
             ) : (
@@ -171,14 +203,14 @@ export default function CreateIssueForm({
             value={summary}
             onChange={setSummary}
             n8nBaseUrl={n8nBaseUrl}
-            context={{ issue_type: issuetype, summary, description }}
+            context={aiContext}
           />
 
           <AiDescriptionDiff
             value={description}
             onChange={setDescription}
             n8nBaseUrl={n8nBaseUrl}
-            context={{ issue_type: issuetype, summary, description }}
+            context={aiContext}
           />
 
           <FormSection title="Основные поля">
@@ -244,7 +276,7 @@ export default function CreateIssueForm({
               value={checklists}
               onChange={setChecklists}
               n8nBaseUrl={n8nBaseUrl}
-              context={{ issue_type: issuetype, summary, description }}
+              context={aiContext}
             />
           </FormSection>
         </fieldset>
@@ -259,7 +291,7 @@ export default function CreateIssueForm({
           >
             {submitting
               ? <><Loader2 size={15} className="animate-spin" /> Создание...</>
-              : <><Send size={15} /> {parentIssueKey ? 'Создать подзадачу' : 'Создать в Jira'}</>
+              : <><Send size={15} /> {createMode === 'subtask' ? 'Создать подзадачу' : createMode === 'epic-child' ? 'Создать в эпике' : 'Создать в Jira'}</>
             }
           </Button>
           <Button

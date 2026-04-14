@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Loader2, Save, Paperclip, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { fetchJiraIssueDetail, updateJiraIssue } from '../lib/jiraApi';
-import type { JiraIssueDetailed, ChecklistItem, UpdateIssueRequest } from '../types';
+import type { EpicIssueContext, JiraIssueDetailed, ChecklistItem, ParentIssueContext, UpdateIssueRequest } from '../types';
 import { normalizePriority } from '../lib/priorities';
 import AiSummaryInput from './AiSummaryInput';
 import AiDescriptionDiff from './AiDescriptionDiff';
@@ -26,6 +26,11 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleString('ru-RU', {
     day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
   });
+}
+
+function isEpicType(issueType: string): boolean {
+  const normalized = issueType.trim().toLowerCase();
+  return normalized === 'epic' || normalized === 'эпик';
 }
 
 export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, onUpdated, onClose, layout = 'sheet' }: Props) {
@@ -152,7 +157,36 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
   const dirtyCount = Object.keys(getDirtyFields()).length;
   const currentIssue = initial.current;
   const fallbackIssueType = currentIssue?.issuetype ?? availableTypes[0] ?? '';
+  const isEpic = isEpicType(fallbackIssueType);
   const parentIssue = currentIssue?.parent;
+  const currentEpic = isEpic ? null : currentIssue?.epic;
+  const parentIssueContext: ParentIssueContext | undefined = currentIssue
+    ? {
+        key: currentIssue.key,
+        summary: currentIssue.summary ?? '',
+        description: currentIssue.description ?? '',
+        issuetype: currentIssue.issuetype ?? '',
+        status: currentIssue.status ?? '',
+        priority: currentIssue.priority ?? '',
+        labels: currentIssue.labels ?? [],
+      }
+    : undefined;
+  const epicIssueContext: EpicIssueContext | undefined = currentIssue
+    ? {
+        key: currentIssue.key,
+        summary: currentIssue.summary ?? '',
+        description: currentIssue.description ?? '',
+        issuetype: currentIssue.issuetype ?? '',
+        status: currentIssue.status ?? '',
+        priority: currentIssue.priority ?? '',
+        labels: currentIssue.labels ?? [],
+      }
+    : undefined;
+  const childIssueTypes = availableTypes.filter((type) => {
+    const normalized = type.trim().toLowerCase();
+    return normalized !== 'epic' && normalized !== 'эпик' && normalized !== 'подзадача' && normalized !== 'business sub-task';
+  });
+  const epicChildIssueTypes = childIssueTypes.length ? childIssueTypes : ['User Story', 'Задача', 'Ошибка', 'Техдолг'];
 
   const handleSubtaskCreated = async (createdKey: string) => {
     setSubtaskCreatedKey(createdKey);
@@ -192,58 +226,22 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
           </Alert>
         ) : null}
 
-        {subtaskCreatedKey ? (
-          <Alert variant="success">
+        {currentEpic ? (
+          <Alert variant="info">
             <AlertDescription>
-              Подзадача <strong>{subtaskCreatedKey}</strong> создана и привязана к {issueKey}.
+              Эпик: <strong>{currentEpic.key}</strong>
+              {currentEpic.summary ? ` · ${currentEpic.summary}` : ''}
             </AlertDescription>
           </Alert>
         ) : null}
 
-        <FormSection
-          title="Подзадачи"
-          description="Быстро создать подзадачу, не выходя из редактирования родительской задачи."
-        >
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/20 px-4 py-3">
-              <div className="text-sm text-muted-foreground">
-                Новая подзадача автоматически создастся под {issueKey}.
-              </div>
-              <Button
-                type="button"
-                variant={subtaskOpen ? 'secondary' : 'outline'}
-                onClick={() => setSubtaskOpen((prev) => !prev)}
-              >
-                {subtaskOpen ? <ChevronDown size={15} /> : <Plus size={15} />}
-                {subtaskOpen ? 'Скрыть форму' : 'Создать подзадачу'}
-              </Button>
-            </div>
-
-            {subtaskOpen ? (
-              <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
-                <CreateIssueForm
-                  n8nBaseUrl={n8nBaseUrl}
-                  availableTypes={availableTypes}
-                  fixedIssueType="Подзадача"
-                  parentIssueKey={issueKey}
-                  parentIssueSummary={currentIssue?.summary}
-                  onCreated={handleSubtaskCreated}
-                  onClose={() => setSubtaskOpen(false)}
-                  layout="page"
-                />
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="flex items-center gap-2 self-start text-sm font-medium text-blue-700 transition-colors hover:text-slate-900"
-                onClick={() => setSubtaskOpen(true)}
-              >
-                <ChevronRight size={15} />
-                Открыть полную форму подзадачи
-              </button>
-            )}
-          </div>
-        </FormSection>
+        {subtaskCreatedKey ? (
+          <Alert variant="success">
+            <AlertDescription>
+              {isEpic ? 'Тикет' : 'Подзадача'} <strong>{subtaskCreatedKey}</strong> {isEpic ? 'создан в эпике' : 'создана и привязана к'} {issueKey}.
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         <form id="edit-issue-form" onSubmit={handleSave} className="contents">
         <FormSection title="Основные поля">
@@ -315,6 +313,65 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
           </FormSection>
         )}
         </form>
+
+        <FormSection
+          title={isEpic ? 'Тикеты в эпике' : 'Подзадачи'}
+          description={isEpic ? 'Быстро создать задачу, баг или техдолг внутри этого эпика.' : 'Быстро создать подзадачу, не выходя из редактирования родительской задачи.'}
+        >
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/20 px-4 py-3">
+              <div className="text-sm text-muted-foreground">
+                {isEpic ? `Новый тикет автоматически попадёт в эпик ${issueKey}.` : `Новая подзадача автоматически создастся под ${issueKey}.`}
+              </div>
+              <Button
+                type="button"
+                variant={subtaskOpen ? 'secondary' : 'outline'}
+                onClick={() => setSubtaskOpen((prev) => !prev)}
+              >
+                {subtaskOpen ? <ChevronDown size={15} /> : <Plus size={15} />}
+                {subtaskOpen ? 'Скрыть форму' : isEpic ? 'Создать тикет в эпике' : 'Создать подзадачу'}
+              </Button>
+            </div>
+
+            {subtaskOpen ? (
+              <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+                {isEpic ? (
+                  <CreateIssueForm
+                    n8nBaseUrl={n8nBaseUrl}
+                    availableTypes={epicChildIssueTypes}
+                    epicIssueKey={issueKey}
+                    epicIssueSummary={currentIssue?.summary}
+                    epicIssueContext={epicIssueContext}
+                    onCreated={handleSubtaskCreated}
+                    onClose={() => setSubtaskOpen(false)}
+                    layout="page"
+                  />
+                ) : (
+                  <CreateIssueForm
+                    n8nBaseUrl={n8nBaseUrl}
+                    availableTypes={availableTypes}
+                    fixedIssueType="Подзадача"
+                    parentIssueKey={issueKey}
+                    parentIssueSummary={currentIssue?.summary}
+                    parentIssueContext={parentIssueContext}
+                    onCreated={handleSubtaskCreated}
+                    onClose={() => setSubtaskOpen(false)}
+                    layout="page"
+                  />
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="flex items-center gap-2 self-start text-sm font-medium text-blue-700 transition-colors hover:text-slate-900"
+                onClick={() => setSubtaskOpen(true)}
+              >
+                <ChevronRight size={15} />
+                {isEpic ? 'Открыть полную форму тикета' : 'Открыть полную форму подзадачи'}
+              </button>
+            )}
+          </div>
+        </FormSection>
       </div>
 
       <div className={cn('flex-shrink-0 border-t border-border bg-background', layout === 'page' ? 'sticky bottom-0 px-0 py-4' : 'px-6 py-4')}>

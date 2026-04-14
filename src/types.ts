@@ -65,6 +65,8 @@ export interface RiceIssue {
   summary: string;
   issue_type: string;
   parent?: JiraIssueParent | null;
+  epic?: JiraIssueEpic | null;
+  epic_key?: string | null;
   labels: string;
   priority: string;
   status: string;
@@ -106,6 +108,8 @@ export interface JiraIssueShort {
   priority: string;
   issuetype: string;
   parent?: JiraIssueParent | null;
+  epic?: JiraIssueEpic | null;
+  epic_key?: string | null;
   score?: number | null;
   rice_score?: number | null;
   bug_score?: number | null;
@@ -146,6 +150,33 @@ export interface JiraIssueParent {
   priority?: string;
 }
 
+export interface JiraIssueEpic {
+  key: string;
+  summary?: string;
+  status?: string;
+  priority?: string;
+}
+
+export interface ParentIssueContext {
+  key: string;
+  summary: string;
+  description: string;
+  issuetype: string;
+  status: string;
+  priority: string;
+  labels: string[];
+}
+
+export interface EpicIssueContext {
+  key: string;
+  summary: string;
+  description: string;
+  issuetype: string;
+  status: string;
+  priority: string;
+  labels: string[];
+}
+
 export interface JiraAttachment {
   filename: string;
   mimeType: string;
@@ -164,6 +195,7 @@ export interface CreateIssueRequest {
   priority: string;
   issuetype: string;
   parent?: { key: string };
+  epic?: { key: string };
   needToUpdateSource: string;
   slService: string;
   productCatalog: string;
@@ -188,6 +220,8 @@ export interface OptimizeContext {
   summary?: string;
   description?: string;
   comments?: JiraComment[];
+  parent?: ParentIssueContext;
+  epic?: EpicIssueContext;
 }
 
 export interface AiGenerateResponse {

@@ -1,4 +1,4 @@
-import type { Issue, JiraIssueParent, JiraIssueShort, RiceIssue, ThroughputIssueRaw } from '../types';
+import type { Issue, JiraIssueEpic, JiraIssueParent, JiraIssueShort, RiceIssue, ThroughputIssueRaw } from '../types';
 
 type RawIssue = Partial<Issue> & {
   type?: string;
@@ -13,6 +13,8 @@ type RawJiraIssue = Partial<JiraIssueShort> & {
   issue_type?: string;
   issueType?: string;
   parent?: unknown;
+  epic?: unknown;
+  epic_key?: unknown;
 };
 
 type RawThroughputIssue = Partial<ThroughputIssueRaw> & {
@@ -26,9 +28,19 @@ type RawRiceIssue = Partial<RiceIssue> & {
   issueType?: string;
   labels?: string | string[];
   parent?: unknown;
+  epic?: unknown;
+  epic_key?: unknown;
 };
 
 type RawParent = Partial<JiraIssueParent> & {
+  fields?: {
+    summary?: unknown;
+    status?: { name?: unknown };
+    priority?: { name?: unknown };
+  };
+};
+
+type RawEpic = Partial<JiraIssueEpic> & {
   fields?: {
     summary?: unknown;
     status?: { name?: unknown };
@@ -85,6 +97,37 @@ function normalizeParent(raw: unknown): JiraIssueParent | null {
   };
 }
 
+function normalizeEpic(raw: unknown): JiraIssueEpic | null {
+  if (typeof raw === 'string') {
+    const key = raw.trim();
+    return key ? { key } : null;
+  }
+  if (!raw || typeof raw !== 'object') return null;
+  const epic = raw as RawEpic;
+  const key = typeof epic.key === 'string' ? epic.key : '';
+  if (!key) return null;
+
+  const summary = typeof epic.summary === 'string'
+    ? epic.summary
+    : typeof epic.fields?.summary === 'string'
+      ? epic.fields.summary
+      : undefined;
+
+  const status = typeof epic.status === 'string'
+    ? epic.status
+    : typeof epic.fields?.status?.name === 'string'
+      ? epic.fields.status.name
+      : undefined;
+
+  const priority = typeof epic.priority === 'string'
+    ? epic.priority
+    : typeof epic.fields?.priority?.name === 'string'
+      ? epic.fields.priority.name
+      : undefined;
+
+  return { key, summary, status, priority };
+}
+
 export function normalizeIssue(raw: RawIssue): Issue {
   const transitions = Array.isArray(raw.transitions)
     ? raw.transitions.filter((t): t is Issue['transitions'][number] => Boolean(t?.to && t?.date))
@@ -100,6 +143,7 @@ export function normalizeIssue(raw: RawIssue): Issue {
 }
 
 export function normalizeJiraIssue(raw: RawJiraIssue): JiraIssueShort {
+  const epic = normalizeEpic(raw.epic ?? raw.epic_key);
   return {
     ...raw,
     key: raw.key ?? '',
@@ -108,6 +152,8 @@ export function normalizeJiraIssue(raw: RawJiraIssue): JiraIssueShort {
     priority: raw.priority ?? '',
     issuetype: raw.issuetype ?? raw.issue_type ?? raw.issueType ?? '',
     parent: normalizeParent(raw.parent),
+    epic,
+    epic_key: typeof raw.epic_key === 'string' ? raw.epic_key : epic?.key ?? null,
     score: toNumber(raw.score),
     rice_score: toNumber(raw.rice_score),
     bug_score: toNumber(raw.bug_score),
@@ -136,11 +182,14 @@ export function normalizeThroughputIssue(raw: RawThroughputIssue): ThroughputIss
 }
 
 export function normalizeRiceIssue(raw: RawRiceIssue): RiceIssue {
+  const epic = normalizeEpic(raw.epic ?? raw.epic_key);
   return {
     key: raw.key ?? '',
     summary: raw.summary ?? '',
     issue_type: raw.issue_type ?? raw.issuetype ?? raw.issueType ?? '',
     parent: normalizeParent(raw.parent),
+    epic,
+    epic_key: typeof raw.epic_key === 'string' ? raw.epic_key : epic?.key ?? null,
     labels: toText(raw.labels),
     priority: raw.priority ?? '',
     status: raw.status ?? '',
