@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { RefreshCw } from 'lucide-react';
 
 import IssuesTab from './IssuesTab';
@@ -86,6 +87,10 @@ export function TasksSection({
 }: Props) {
   const modeCopy = MODE_COPY[mode];
   const hasLoadedData = issues.length > 0 || scoringIssues.length > 0;
+  const issueParentByKey = useMemo(
+    () => Object.fromEntries(issues.map((issue) => [issue.key, issue.parent ?? null])),
+    [issues],
+  );
 
   const handleRefresh = () => {
     if (refreshBlocked) return;
@@ -158,6 +163,7 @@ export function TasksSection({
           <RiceSection
             n8nBaseUrl={n8nBaseUrl}
             issues={scoringIssues}
+            issueParentByKey={issueParentByKey}
             loading={loading}
             refreshing={refreshing}
             error={error}

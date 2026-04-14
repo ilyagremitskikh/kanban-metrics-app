@@ -1,4 +1,4 @@
-import type { Issue, JiraIssueShort, RiceIssue, ThroughputIssueRaw } from '../types';
+import type { Issue, JiraIssueParent, JiraIssueShort, RiceIssue, ThroughputIssueRaw } from '../types';
 
 type RawIssue = Partial<Issue> & {
   type?: string;
@@ -12,6 +12,7 @@ type RawIssue = Partial<Issue> & {
 type RawJiraIssue = Partial<JiraIssueShort> & {
   issue_type?: string;
   issueType?: string;
+  parent?: unknown;
 };
 
 type RawThroughputIssue = Partial<ThroughputIssueRaw> & {
@@ -24,6 +25,15 @@ type RawRiceIssue = Partial<RiceIssue> & {
   issuetype?: string;
   issueType?: string;
   labels?: string | string[];
+  parent?: unknown;
+};
+
+type RawParent = Partial<JiraIssueParent> & {
+  fields?: {
+    summary?: unknown;
+    status?: { name?: unknown };
+    priority?: { name?: unknown };
+  };
 };
 
 function toText(value: unknown): string {
@@ -40,6 +50,39 @@ function toNumber(value: unknown): number | null | undefined {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+function normalizeParent(raw: unknown): JiraIssueParent | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const parent = raw as RawParent;
+  const key = typeof parent.key === 'string' ? parent.key : '';
+  if (!key) return null;
+
+  const summary = typeof parent.summary === 'string'
+    ? parent.summary
+    : typeof parent.fields?.summary === 'string'
+      ? parent.fields.summary
+      : '';
+
+  const status = typeof parent.status === 'string'
+    ? parent.status
+    : typeof parent.fields?.status?.name === 'string'
+      ? parent.fields.status.name
+      : undefined;
+
+  const priority = typeof parent.priority === 'string'
+    ? parent.priority
+    : typeof parent.fields?.priority?.name === 'string'
+      ? parent.fields.priority.name
+      : undefined;
+
+  return {
+    id: typeof parent.id === 'string' ? parent.id : undefined,
+    key,
+    summary,
+    status,
+    priority,
+  };
 }
 
 export function normalizeIssue(raw: RawIssue): Issue {
@@ -64,6 +107,7 @@ export function normalizeJiraIssue(raw: RawJiraIssue): JiraIssueShort {
     status: raw.status ?? '',
     priority: raw.priority ?? '',
     issuetype: raw.issuetype ?? raw.issue_type ?? raw.issueType ?? '',
+    parent: normalizeParent(raw.parent),
     score: toNumber(raw.score),
     rice_score: toNumber(raw.rice_score),
     bug_score: toNumber(raw.bug_score),
@@ -96,6 +140,7 @@ export function normalizeRiceIssue(raw: RawRiceIssue): RiceIssue {
     key: raw.key ?? '',
     summary: raw.summary ?? '',
     issue_type: raw.issue_type ?? raw.issuetype ?? raw.issueType ?? '',
+    parent: normalizeParent(raw.parent),
     labels: toText(raw.labels),
     priority: raw.priority ?? '',
     status: raw.status ?? '',

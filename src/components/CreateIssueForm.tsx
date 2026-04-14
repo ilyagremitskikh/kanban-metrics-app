@@ -21,12 +21,25 @@ interface Props {
   onCreated: (key: string) => void;
   onClose: () => void;
   layout?: IssueFormLayoutMode;
+  fixedIssueType?: string;
+  parentIssueKey?: string;
+  parentIssueSummary?: string;
 }
 
-export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated, onClose, layout = 'sheet' }: Props) {
+export default function CreateIssueForm({
+  n8nBaseUrl,
+  availableTypes,
+  onCreated,
+  onClose,
+  layout = 'sheet',
+  fixedIssueType,
+  parentIssueKey,
+  parentIssueSummary,
+}: Props) {
   const issueTypes = availableTypes.length ? availableTypes : ['User Story'];
+  const effectiveIssueTypes = fixedIssueType ? [fixedIssueType] : issueTypes;
   // AI generator state
-  const [aiIssueType, setAiIssueType] = useState(issueTypes[0]);
+  const [aiIssueType, setAiIssueType] = useState(fixedIssueType ?? issueTypes[0]);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -35,7 +48,7 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('Нормальный');
-  const [issuetype, setIssuetype] = useState(issueTypes[0]);
+  const [issuetype, setIssuetype] = useState(fixedIssueType ?? issueTypes[0]);
   const [needToUpdateSource, setNeedToUpdateSource] = useState(false);
   const [slService, setSlService] = useState('TB\\expresscredit');
   const [productCatalog, setProductCatalog] = useState('Экспресс-кредит');
@@ -55,7 +68,7 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
       setSummary(result.summary ?? '');
       setDescription(result.description ?? '');
       setPriority(normalizePriority(result.priority ?? 'Medium'));
-      setIssuetype(result.issuetype ?? aiIssueType);
+      setIssuetype(fixedIssueType ?? result.issuetype ?? aiIssueType);
       if (result.checklists?.length) setChecklists(result.checklists);
     } catch {
       setAiError('Ошибка ИИ-генерации. Проверьте подключение и повторите.');
@@ -75,6 +88,7 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
         description,
         priority,
         issuetype,
+        parent: parentIssueKey ? { key: parentIssueKey } : undefined,
         needToUpdateSource: needToUpdateSource ? 'Да' : '',
         slService,
         productCatalog,
@@ -96,23 +110,33 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
     <form onSubmit={handleSubmit} className={cn('flex flex-col', layout === 'page' ? 'min-h-[70vh]' : 'h-full')}>
       <div className={cn('flex flex-1 flex-col gap-4 overflow-y-auto', layout === 'page' ? 'px-0 py-1' : 'px-6 py-5')}>
         <FormSection
-          title="ИИ-черновик"
+          title={parentIssueKey ? 'ИИ-черновик подзадачи' : 'ИИ-черновик'}
           className="border-blue-200 bg-blue-50/50"
         >
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <Label className="mb-2 block">Тип задачи</Label>
-              <select
-                value={aiIssueType}
-                onChange={e => setAiIssueType(e.target.value)}
-                disabled={formDisabled}
-                className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm
-                  focus:border-blue-600 focus:ring-2 focus:ring-blue-100 focus:outline-none
-                  transition-all duration-200 cursor-pointer disabled:opacity-60"
-              >
-                {issueTypes.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
+            {fixedIssueType ? (
+              <Alert variant="info">
+                <AlertDescription>
+                  Создаём подзадачу типа <strong>{fixedIssueType}</strong>
+                  {parentIssueKey ? ` для ${parentIssueKey}` : ''}.
+                  {parentIssueSummary ? ` ${parentIssueSummary}` : ''}
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div className="flex flex-col gap-1">
+                <Label className="mb-2 block">Тип задачи</Label>
+                <select
+                  value={aiIssueType}
+                  onChange={e => setAiIssueType(e.target.value)}
+                  disabled={formDisabled}
+                  className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm
+                    focus:border-blue-600 focus:ring-2 focus:ring-blue-100 focus:outline-none
+                    transition-all duration-200 cursor-pointer disabled:opacity-60"
+                >
+                  {effectiveIssueTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            )}
 
             <div className="flex flex-col gap-1">
               <Label className="mb-2 block">Контекст задачи</Label>
@@ -160,7 +184,14 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
           <FormSection title="Основные поля">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <PrioritySelect value={priority} onChange={setPriority} />
-              <IssueTypeSelect value={issuetype} availableTypes={issueTypes} onChange={setIssuetype} />
+              {fixedIssueType ? (
+                <div className="flex flex-col gap-1">
+                  <Label className="mb-2 block">Тип задачи</Label>
+                  <Input value={fixedIssueType} disabled />
+                </div>
+              ) : (
+                <IssueTypeSelect value={issuetype} availableTypes={effectiveIssueTypes} onChange={setIssuetype} />
+              )}
             </div>
           </FormSection>
 
@@ -228,7 +259,7 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
           >
             {submitting
               ? <><Loader2 size={15} className="animate-spin" /> Создание...</>
-              : <><Send size={15} /> Создать в Jira</>
+              : <><Send size={15} /> {parentIssueKey ? 'Создать подзадачу' : 'Создать в Jira'}</>
             }
           </Button>
           <Button

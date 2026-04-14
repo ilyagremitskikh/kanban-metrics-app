@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
-import { Loader2, Save, Paperclip } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Loader2, Save, Paperclip, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { fetchJiraIssueDetail, updateJiraIssue } from '../lib/jiraApi';
 import type { JiraIssueDetailed, ChecklistItem, UpdateIssueRequest } from '../types';
 import { normalizePriority } from '../lib/priorities';
 import AiSummaryInput from './AiSummaryInput';
 import AiDescriptionDiff from './AiDescriptionDiff';
+import CreateIssueForm from './CreateIssueForm';
 import { FormSection, type IssueFormLayoutMode } from './IssueFormLayout';
 import { PrioritySelect, LabelsInput, ChecklistEditor } from './IssueFormFields';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,7 @@ interface Props {
   n8nBaseUrl: string;
   availableTypes: string[];
   issueKey: string;
-  onUpdated: () => void;
+  onUpdated: (options?: { close?: boolean }) => void;
   onClose: () => void;
   layout?: IssueFormLayoutMode;
 }
@@ -43,26 +44,36 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [subtaskOpen, setSubtaskOpen] = useState(false);
+  const [subtaskCreatedKey, setSubtaskCreatedKey] = useState<string | null>(null);
 
   // Read-only info
   const [comments, setComments] = useState<JiraIssueDetailed['comments']>([]);
   const [attachments, setAttachments] = useState<JiraIssueDetailed['attachments_info']>([]);
 
+  const loadIssue = useCallback(async (currentIssueKey: string) => {
+    return fetchJiraIssueDetail(n8nBaseUrl, currentIssueKey);
+  }, [n8nBaseUrl]);
+
+  const applyIssue = (issue: JiraIssueDetailed) => {
+    initial.current = issue;
+    setSummary(issue.summary ?? '');
+    setDescription(issue.description ?? '');
+    setPriority(normalizePriority(issue.priority ?? 'Medium'));
+    setLabels(issue.labels ?? []);
+    setChecklists(issue.checklists ?? []);
+    setComments(issue.comments ?? []);
+    setAttachments(issue.attachments_info ?? []);
+  };
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    fetchJiraIssueDetail(n8nBaseUrl, issueKey)
-      .then(issue => {
+    loadIssue(issueKey)
+      .then((issue) => {
         if (cancelled) return;
-        initial.current = issue;
-        setSummary(issue.summary ?? '');
-        setDescription(issue.description ?? '');
-        setPriority(normalizePriority(issue.priority ?? 'Medium'));
-        setLabels(issue.labels ?? []);
-        setChecklists(issue.checklists ?? []);
-        setComments(issue.comments ?? []);
-        setAttachments(issue.attachments_info ?? []);
+        applyIssue(issue);
       })
       .catch(() => {
         if (!cancelled) setLoadError('Не удалось загрузить задачу.');
@@ -71,7 +82,7 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [n8nBaseUrl, issueKey]);
+  }, [issueKey, loadIssue]);
 
   // Dirty tracking
   const getDirtyFields = (): UpdateIssueRequest => {
@@ -139,10 +150,28 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
   }
 
   const dirtyCount = Object.keys(getDirtyFields()).length;
-  const fallbackIssueType = initial.current?.issuetype ?? availableTypes[0] ?? '';
+  const currentIssue = initial.current;
+  const fallbackIssueType = currentIssue?.issuetype ?? availableTypes[0] ?? '';
+  const parentIssue = currentIssue?.parent;
+
+  const handleSubtaskCreated = async (createdKey: string) => {
+    setSubtaskCreatedKey(createdKey);
+    setSubtaskOpen(false);
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const issue = await loadIssue(issueKey);
+      applyIssue(issue);
+      onUpdated({ close: false });
+    } catch {
+      setLoadError('Подзадача создана, но не удалось обновить данные родителя.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <form onSubmit={handleSave} className={cn('flex flex-col', layout === 'page' ? 'min-h-[70vh]' : 'h-full')}>
+    <div className={cn('flex flex-col', layout === 'page' ? 'min-h-[70vh]' : 'h-full')}>
       <div className={cn('flex flex-1 flex-col gap-4 overflow-y-auto', layout === 'page' ? 'px-0 py-1' : 'px-6 py-5')}>
         <div className="flex flex-wrap items-center gap-2">
           <Badge>{issueKey}</Badge>
@@ -154,6 +183,69 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
           )}
         </div>
 
+        {parentIssue ? (
+          <Alert variant="info">
+            <AlertDescription>
+              Родительская задача: <strong>{parentIssue.key}</strong>
+              {parentIssue.summary ? ` · ${parentIssue.summary}` : ''}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {subtaskCreatedKey ? (
+          <Alert variant="success">
+            <AlertDescription>
+              Подзадача <strong>{subtaskCreatedKey}</strong> создана и привязана к {issueKey}.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        <FormSection
+          title="Подзадачи"
+          description="Быстро создать подзадачу, не выходя из редактирования родительской задачи."
+        >
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/20 px-4 py-3">
+              <div className="text-sm text-muted-foreground">
+                Новая подзадача автоматически создастся под {issueKey}.
+              </div>
+              <Button
+                type="button"
+                variant={subtaskOpen ? 'secondary' : 'outline'}
+                onClick={() => setSubtaskOpen((prev) => !prev)}
+              >
+                {subtaskOpen ? <ChevronDown size={15} /> : <Plus size={15} />}
+                {subtaskOpen ? 'Скрыть форму' : 'Создать подзадачу'}
+              </Button>
+            </div>
+
+            {subtaskOpen ? (
+              <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+                <CreateIssueForm
+                  n8nBaseUrl={n8nBaseUrl}
+                  availableTypes={availableTypes}
+                  fixedIssueType="Подзадача"
+                  parentIssueKey={issueKey}
+                  parentIssueSummary={currentIssue?.summary}
+                  onCreated={handleSubtaskCreated}
+                  onClose={() => setSubtaskOpen(false)}
+                  layout="page"
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="flex items-center gap-2 self-start text-sm font-medium text-blue-700 transition-colors hover:text-slate-900"
+                onClick={() => setSubtaskOpen(true)}
+              >
+                <ChevronRight size={15} />
+                Открыть полную форму подзадачи
+              </button>
+            )}
+          </div>
+        </FormSection>
+
+        <form id="edit-issue-form" onSubmit={handleSave} className="contents">
         <FormSection title="Основные поля">
           <div className="space-y-4">
             <AiSummaryInput
@@ -222,6 +314,7 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
             </div>
           </FormSection>
         )}
+        </form>
       </div>
 
       <div className={cn('flex-shrink-0 border-t border-border bg-background', layout === 'page' ? 'sticky bottom-0 px-0 py-4' : 'px-6 py-4')}>
@@ -230,6 +323,7 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
         <div className="flex items-center gap-3">
           <Button
             type="submit"
+            form="edit-issue-form"
             disabled={submitting || !isDirty}
           >
             {submitting
@@ -246,6 +340,6 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
           </Button>
         </div>
       </div>
-    </form>
+    </div>
   );
 }

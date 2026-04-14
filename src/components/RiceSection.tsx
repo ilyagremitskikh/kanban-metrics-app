@@ -5,7 +5,7 @@ import {
   type JiraIssueScoringSaveResponse,
   type JiraIssueScoringUpdate,
 } from '../lib/jiraApi';
-import type { RiceIssue } from '../types';
+import type { JiraIssueParent, RiceIssue } from '../types';
 import {
   IssueKeyCell,
   StatusCell,
@@ -213,6 +213,7 @@ function RankCell({ value, isDirty }: { value: number | null; isDirty: boolean }
 interface Props {
   n8nBaseUrl: string;
   issues: RiceIssue[];
+  issueParentByKey?: Record<string, JiraIssueParent | null | undefined>;
   loading: boolean;
   refreshing: boolean;
   error: string | null;
@@ -233,6 +234,7 @@ interface Props {
 export function RiceSection({
   n8nBaseUrl,
   issues,
+  issueParentByKey = {},
   loading,
   refreshing,
   error,
@@ -270,11 +272,19 @@ export function RiceSection({
   const [saving,  setSaving]  = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
+  const enrichedIssues = useMemo(
+    () => issues.map((issue) => ({
+      ...issue,
+      parent: issue.parent ?? issueParentByKey[issue.key] ?? null,
+    })),
+    [issueParentByKey, issues],
+  );
+
   useEffect(() => {
     const riceMap = new Map<string, ScoreRow>();
     const bugMap  = new Map<string, BugRow>();
     const tdMap   = new Map<string, TdRow>();
-    for (const issue of issues) {
+    for (const issue of enrichedIssues) {
       riceMap.set(issue.key, initRow(issue));
       bugMap.set(issue.key, initBugRow(issue));
       tdMap.set(issue.key, initTdRow(issue));
@@ -284,7 +294,7 @@ export function RiceSection({
     setTdScores(tdMap);
     setDirtyKeys(new Set());
     setSortTrigger((t) => t + 1);
-  }, [issues]);
+  }, [enrichedIssues]);
 
   useEffect(() => {
     onDirtyChange?.(dirtyKeys.size > 0);
@@ -299,7 +309,7 @@ export function RiceSection({
   const save = async () => {
     setSaving(true); setMsg(null);
     try {
-      const updates = issues.flatMap((issue): JiraIssueScoringUpdate[] => {
+      const updates = enrichedIssues.flatMap((issue): JiraIssueScoringUpdate[] => {
         if (!dirtyKeys.has(issue.key)) return [];
 
         if (issue.issue_type === 'Ошибка') {
@@ -379,9 +389,9 @@ export function RiceSection({
   };
 
   // ── Filtered lists ────────────────────────────────────────────────────────
-  const riceIssues = useMemo(() => issues.filter(i => i.issue_type !== 'Ошибка' && i.issue_type !== 'Техдолг'), [issues]);
-  const bugIssues  = useMemo(() => issues.filter(i => i.issue_type === 'Ошибка'), [issues]);
-  const tdIssues   = useMemo(() => issues.filter(i => i.issue_type === 'Техдолг'), [issues]);
+  const riceIssues = useMemo(() => enrichedIssues.filter(i => i.issue_type !== 'Ошибка' && i.issue_type !== 'Техдолг'), [enrichedIssues]);
+  const bugIssues  = useMemo(() => enrichedIssues.filter(i => i.issue_type === 'Ошибка'), [enrichedIssues]);
+  const tdIssues   = useMemo(() => enrichedIssues.filter(i => i.issue_type === 'Техдолг'), [enrichedIssues]);
 
   // ── Sorted lists ──────────────────────────────────────────────────────────
   const sortedRice = useMemo(() => [...riceIssues].sort((a, b) => {
@@ -458,7 +468,7 @@ export function RiceSection({
     {
       id: 'summary',
       header: () => <HeaderLabel title="Summary" hint="контекст задачи" />,
-      cell: ({ row }) => <SummaryCell>{row.original.summary}</SummaryCell>,
+      cell: ({ row }) => <SummaryCell parent={row.original.parent}>{row.original.summary}</SummaryCell>,
     },
     {
       id: 'status',
@@ -584,7 +594,7 @@ export function RiceSection({
     {
       id: 'summary',
       header: () => <HeaderLabel title="Summary" hint="контекст дефекта" />,
-      cell: ({ row }) => <SummaryCell>{row.original.summary}</SummaryCell>,
+      cell: ({ row }) => <SummaryCell parent={row.original.parent}>{row.original.summary}</SummaryCell>,
     },
     {
       id: 'status',
@@ -671,7 +681,7 @@ export function RiceSection({
     {
       id: 'summary',
       header: () => <HeaderLabel title="Summary" hint="контекст долга" />,
-      cell: ({ row }) => <SummaryCell>{row.original.summary}</SummaryCell>,
+      cell: ({ row }) => <SummaryCell parent={row.original.parent}>{row.original.summary}</SummaryCell>,
     },
     {
       id: 'status',

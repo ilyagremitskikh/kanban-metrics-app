@@ -115,8 +115,14 @@ export default function IssuesTab({
   };
 
   const handleUpdated = () => {
-    setViewMode({ mode: 'list' });
     onRefresh();
+  };
+
+  const handleEditUpdated = (options?: { close?: boolean }) => {
+    if (options?.close !== false) {
+      setViewMode({ mode: 'list' });
+    }
+    handleUpdated();
   };
 
   const availableTypes = useMemo(() => getUniqueTypes(issues), [issues]);
@@ -184,7 +190,7 @@ export default function IssuesTab({
           <span className="block text-[10px] font-normal normal-case tracking-normal text-muted-foreground">контекст задачи</span>
         </div>
       ),
-      cell: ({ row }) => <SummaryCell>{row.original.summary}</SummaryCell>,
+      cell: ({ row }) => <SummaryCell parent={row.original.parent}>{row.original.summary}</SummaryCell>,
     },
     {
       id: 'status',
@@ -267,7 +273,7 @@ export default function IssuesTab({
               n8nBaseUrl={n8nBaseUrl}
               availableTypes={availableTypes}
               issueKey={viewMode.issueKey}
-              onUpdated={handleUpdated}
+              onUpdated={handleEditUpdated}
               onClose={() => setViewMode({ mode: 'list' })}
               layout="page"
             />

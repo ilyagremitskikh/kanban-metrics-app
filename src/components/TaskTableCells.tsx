@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
+import { ChevronsDown } from 'lucide-react';
 
 import { StatusBadge } from './Badges';
-import { JIRA_BASE_URL } from '../types';
+import { JIRA_BASE_URL, type JiraIssueParent } from '../types';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -44,15 +45,33 @@ export function IssueKeyCell({
   );
 }
 
-export function SummaryCell({ children, className }: { children: ReactNode; className?: string }) {
+export function SummaryCell({
+  children,
+  className,
+  parent,
+}: {
+  children: ReactNode;
+  className?: string;
+  parent?: JiraIssueParent | null;
+}) {
   return (
-    <span
-      className={cn(
-        'line-clamp-2 block min-w-[240px] max-w-[34rem] break-words text-[13px] font-medium leading-5 text-slate-900 transition-colors group-hover:text-slate-950',
-        className,
-      )}
-    >
-      {children}
+    <span className={cn('block min-w-[240px] max-w-[34rem]', className)}>
+      {parent?.key ? (
+        <span className="mb-1 inline-flex max-w-full items-center gap-1.5 text-[11px] font-medium leading-4 text-slate-500 transition-colors group-hover:text-slate-700">
+          <ChevronsDown size={12} className="shrink-0 text-blue-500" />
+          <span className="truncate">
+            <span className="font-mono font-semibold text-slate-600">{parent.key}</span>
+            {parent.summary ? ` · ${parent.summary}` : ''}
+          </span>
+        </span>
+      ) : null}
+      <span
+        className={cn(
+          'line-clamp-2 block break-words text-[13px] font-medium leading-5 text-slate-900 transition-colors group-hover:text-slate-950',
+        )}
+      >
+        {children}
+      </span>
     </span>
   );
 }

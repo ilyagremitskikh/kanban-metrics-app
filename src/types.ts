@@ -64,6 +64,7 @@ export interface RiceIssue {
   key: string;
   summary: string;
   issue_type: string;
+  parent?: JiraIssueParent | null;
   labels: string;
   priority: string;
   status: string;
@@ -104,6 +105,7 @@ export interface JiraIssueShort {
   status: string;
   priority: string;
   issuetype: string;
+  parent?: JiraIssueParent | null;
   score?: number | null;
   rice_score?: number | null;
   bug_score?: number | null;
@@ -136,6 +138,14 @@ export interface JiraComment {
   created: string;
 }
 
+export interface JiraIssueParent {
+  id?: string;
+  key: string;
+  summary: string;
+  status?: string;
+  priority?: string;
+}
+
 export interface JiraAttachment {
   filename: string;
   mimeType: string;
@@ -153,6 +163,7 @@ export interface CreateIssueRequest {
   description: string;
   priority: string;
   issuetype: string;
+  parent?: { key: string };
   needToUpdateSource: string;
   slService: string;
   productCatalog: string;
