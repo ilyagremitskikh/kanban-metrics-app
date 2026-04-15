@@ -1,3 +1,28 @@
+export const BUSINESS_ISSUE_TYPES = ['user story', 'epic'];
+const EPIC_TYPE = 'epic';
+const SUBTASK_TYPE_MARKERS = ['sub-task', 'subtask', 'подзадача'];
+
+export function isBusinessType(issuetype: string): boolean {
+  return BUSINESS_ISSUE_TYPES.includes(issuetype.trim().toLowerCase());
+}
+
+export function isEpicType(issuetype: string): boolean {
+  return issuetype.trim().toLowerCase() === EPIC_TYPE;
+}
+
+export function isSubtaskType(issuetype: string): boolean {
+  const normalized = issuetype.trim().toLowerCase();
+  return SUBTASK_TYPE_MARKERS.some((marker) => normalized.includes(marker));
+}
+
+export function getEpicChildTypeOptions(availableTypes: string[]): string[] {
+  return availableTypes.filter((typeName) => {
+    const normalized = typeName.trim();
+    if (!normalized) return false;
+    return !isEpicType(normalized) && !isSubtaskType(normalized);
+  });
+}
+
 const PALETTE = [
   '#2563eb',
   '#ef4444',

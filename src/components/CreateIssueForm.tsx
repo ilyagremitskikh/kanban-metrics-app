@@ -5,6 +5,7 @@ import type { ChecklistItem, TaskMutationPatch } from '../types';
 import { normalizePriority } from '../lib/priorities';
 import AiSummaryInput from './AiSummaryInput';
 import AiDescriptionDiff from './AiDescriptionDiff';
+import ChildIssuesPanel from './ChildIssuesPanel';
 import { FormSection, type IssueFormLayoutMode } from './IssueFormLayout';
 import { PrioritySelect, IssueTypeSelect, LabelsInput, ChecklistEditor } from './IssueFormFields';
 import { Button } from '@/components/ui/button';
@@ -221,6 +222,13 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
           <FormSection title="Чеклист">
             <ChecklistEditor value={checklists} onChange={setChecklists} />
           </FormSection>
+
+          <ChildIssuesPanel
+            n8nBaseUrl={n8nBaseUrl}
+            availableTypes={issueTypes}
+            mode="create"
+            onCreated={() => undefined}
+          />
         </fieldset>
       </div>
 

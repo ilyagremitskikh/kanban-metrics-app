@@ -5,6 +5,7 @@ import type { JiraIssueDetailed, ChecklistItem, TaskMutationPatch, UpdateIssueRe
 import { normalizePriority } from '../lib/priorities';
 import AiSummaryInput from './AiSummaryInput';
 import AiDescriptionDiff from './AiDescriptionDiff';
+import ChildIssuesPanel from './ChildIssuesPanel';
 import { FormSection, type IssueFormLayoutMode } from './IssueFormLayout';
 import { PrioritySelect, LabelsInput, ChecklistEditor } from './IssueFormFields';
 import { Button } from '@/components/ui/button';
@@ -47,6 +48,7 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
   // Read-only info
   const [comments, setComments] = useState<JiraIssueDetailed['comments']>([]);
   const [attachments, setAttachments] = useState<JiraIssueDetailed['attachments_info']>([]);
+  const [children, setChildren] = useState<JiraIssueDetailed['children']>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +65,7 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
         setChecklists(issue.checklists ?? []);
         setComments(issue.comments ?? []);
         setAttachments(issue.attachments_info ?? []);
+        setChildren(issue.children ?? []);
       })
       .catch(() => {
         if (!cancelled) setLoadError('Не удалось загрузить задачу.');
@@ -148,6 +151,32 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
 
   const dirtyCount = Object.keys(getDirtyFields()).length;
   const fallbackIssueType = initial.current?.issuetype ?? availableTypes[0] ?? '';
+  const epicKey = initial.current?.epic_key ?? null;
+
+  const handleChildCreated = (patch: TaskMutationPatch) => {
+    const nextChild = {
+      key: patch.key,
+      summary: patch.summary ?? '',
+      description: patch.description,
+      status: patch.status ?? 'Создана',
+      priority: patch.priority ?? 'Нормальный',
+      issuetype: patch.issuetype ?? '',
+      parent_key: patch.parent_key,
+      epic_key: patch.epic_key,
+      labels: patch.labels ?? [],
+      created: patch.created,
+      updated: patch.updated,
+    };
+
+    setChildren((current) => [nextChild, ...(current ?? [])]);
+    if (initial.current) {
+      initial.current = {
+        ...initial.current,
+        children: [nextChild, ...(initial.current.children ?? [])],
+      };
+    }
+    onUpdated(patch);
+  };
 
   return (
     <form onSubmit={handleSave} className={cn('flex flex-col', layout === 'page' ? 'min-h-[70vh]' : 'h-full')}>
@@ -188,6 +217,19 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
         <FormSection title="Чеклист">
           <ChecklistEditor value={checklists} onChange={setChecklists} />
         </FormSection>
+
+        <ChildIssuesPanel
+          n8nBaseUrl={n8nBaseUrl}
+          availableTypes={availableTypes}
+          mode="edit"
+          parentIssue={{
+            key: issueKey,
+            issuetype: fallbackIssueType,
+            epic_key: epicKey,
+            children: children ?? [],
+          }}
+          onCreated={handleChildCreated}
+        />
 
         {comments.length > 0 && (
           <FormSection title={`Комментарии (${comments.length})`}>
