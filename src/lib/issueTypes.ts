@@ -1,13 +1,14 @@
-export const BUSINESS_ISSUE_TYPES = ['user story', 'epic'];
-const EPIC_TYPE = 'epic';
+const USER_STORY_TYPE_MARKERS = ['user story', 'пользовательская история'];
+const EPIC_TYPE_MARKERS = ['epic', 'эпик'];
 const SUBTASK_TYPE_MARKERS = ['sub-task', 'subtask', 'подзадача'];
 
 export function isBusinessType(issuetype: string): boolean {
-  return BUSINESS_ISSUE_TYPES.includes(issuetype.trim().toLowerCase());
+  const normalized = issuetype.trim().toLowerCase();
+  return USER_STORY_TYPE_MARKERS.includes(normalized) || EPIC_TYPE_MARKERS.includes(normalized);
 }
 
 export function isEpicType(issuetype: string): boolean {
-  return issuetype.trim().toLowerCase() === EPIC_TYPE;
+  return EPIC_TYPE_MARKERS.includes(issuetype.trim().toLowerCase());
 }
 
 export function isSubtaskType(issuetype: string): boolean {
@@ -21,6 +22,10 @@ export function getEpicChildTypeOptions(availableTypes: string[]): string[] {
     if (!normalized) return false;
     return !isEpicType(normalized) && !isSubtaskType(normalized);
   });
+}
+
+export function getSubtaskTypeOption(availableTypes: string[]): string {
+  return availableTypes.find((typeName) => isSubtaskType(typeName)) ?? 'Подзадача';
 }
 
 const PALETTE = [
@@ -73,7 +78,8 @@ function hashType(value: string): number {
 }
 
 function pickTypeName(issue: IssueLike): string | null | undefined {
-  return issue.issuetype ?? issue.type ?? issue.issueType ?? issue.issue_type;
+  const candidates = [issue.issuetype, issue.type, issue.issueType, issue.issue_type];
+  return candidates.find((value) => typeof value === 'string' && normalizeType(value).length > 0);
 }
 
 export function getUniqueTypes(issues: IssueLike[]): string[] {

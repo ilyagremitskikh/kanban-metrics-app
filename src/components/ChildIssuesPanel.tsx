@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, Loader2, Plus } from 'lucide-react';
 
 import { createJiraIssue } from '../lib/jiraApi';
-import { isEpicType, getEpicChildTypeOptions } from '../lib/issueTypes';
+import { isEpicType, getEpicChildTypeOptions, getSubtaskTypeOption } from '../lib/issueTypes';
 import { JIRA_BASE_URL, type ChecklistItem, type JiraIssueShort, type TaskMutationPatch } from '../types';
 import { FormSection } from './IssueFormLayout';
 import { ChecklistEditor, LabelsInput, PrioritySelect } from './IssueFormFields';
@@ -72,6 +72,7 @@ export default function ChildIssuesPanel({ n8nBaseUrl, availableTypes, mode, par
   const parentIsEpic = isEpicType(parentType);
   const canCreate = mode === 'edit' && !!parentKey;
   const epicChildTypes = useMemo(() => getEpicChildTypeOptions(availableTypes), [availableTypes]);
+  const subtaskType = useMemo(() => getSubtaskTypeOption(availableTypes), [availableTypes]);
   const resolvedSelectedType = parentIsEpic ? (selectedType || epicChildTypes[0] || '') : 'Подзадача';
   const actionLabel = parentIsEpic ? 'Добавить задачу в эпик' : 'Добавить подзадачу';
 
@@ -102,7 +103,7 @@ export default function ChildIssuesPanel({ n8nBaseUrl, availableTypes, mode, par
   const handleCreate = async () => {
     if (!canCreate || !parentKey || !summary.trim()) return;
 
-    const issuetype = parentIsEpic ? resolvedSelectedType : 'Подзадача';
+    const issuetype = parentIsEpic ? resolvedSelectedType : subtaskType;
     if (!issuetype) return;
 
     const parentKeyForChild = parentIsEpic ? undefined : parentKey;
