@@ -106,6 +106,56 @@ describe('snapshots helpers', () => {
     expect(next.meta.lastSyncAt).toBe('2026-04-15T00:00:00.000Z');
   });
 
+  it('updates hierarchy fields when the task patch includes parent or epic links', () => {
+    const snapshot = createTasksSnapshot(
+      'https://n8n.example.com',
+      [{
+        key: 'CRED-124',
+        summary: 'Иерархическая задача',
+        status: 'Backlog',
+        priority: 'Нормальный',
+        issuetype: 'Подзадача',
+        parent_key: 'CRED-10',
+        epic_key: 'CRED-EPIC-1',
+      }],
+      [{
+        key: 'CRED-124',
+        summary: 'Иерархическая задача',
+        issue_type: 'Подзадача',
+        labels: '',
+        priority: 'Нормальный',
+        status: 'Backlog',
+        reach: null,
+        impact: null,
+        confidence: null,
+        effort: null,
+        rice_score: null,
+        bug_risk: null,
+        bug_process: null,
+        bug_scale: null,
+        bug_workaround: null,
+        bug_score: null,
+        td_impact: null,
+        td_effort: null,
+        td_roi: null,
+      }],
+      '2026-04-15T00:00:00.000Z',
+    );
+
+    const next = applyTaskPatchToSnapshot(snapshot, snapshot.key, {
+      key: 'CRED-124',
+      parent_key: 'CRED-11',
+      epic_key: 'CRED-EPIC-2',
+    });
+
+    expect(next.jiraIssues[0]).toMatchObject({
+      key: 'CRED-124',
+      parent_key: 'CRED-11',
+      epic_key: 'CRED-EPIC-2',
+    });
+    expect(next.meta.lastSyncAt).toBe('2026-04-15T00:00:00.000Z');
+  });
+
   it('applies rice updates to both jira and rice views', () => {
     const snapshot = createTasksSnapshot(
       'https://n8n.example.com',
