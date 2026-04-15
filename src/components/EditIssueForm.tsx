@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, Save, Paperclip } from 'lucide-react';
 import { fetchJiraIssueDetail, updateJiraIssue } from '../lib/jiraApi';
-import type { JiraIssueDetailed, ChecklistItem, UpdateIssueRequest } from '../types';
+import type { JiraIssueDetailed, ChecklistItem, TaskMutationPatch, UpdateIssueRequest } from '../types';
 import { normalizePriority } from '../lib/priorities';
 import AiSummaryInput from './AiSummaryInput';
 import AiDescriptionDiff from './AiDescriptionDiff';
@@ -16,7 +16,7 @@ interface Props {
   n8nBaseUrl: string;
   availableTypes: string[];
   issueKey: string;
-  onUpdated: () => void;
+  onUpdated: (patch: TaskMutationPatch) => void;
   onClose: () => void;
   layout?: IssueFormLayoutMode;
 }
@@ -99,6 +99,14 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
     setSubmitSuccess(false);
     try {
       await updateJiraIssue(n8nBaseUrl, issueKey, updates);
+      const mutationPatch: TaskMutationPatch = {
+        key: issueKey,
+        updated: new Date().toISOString(),
+        summary: updates.summary,
+        description: updates.description,
+        priority: updates.priority,
+        labels: updates.labels,
+      };
       // Update initial ref so dirty tracking resets
       if (initial.current) {
         initial.current = {
@@ -110,7 +118,7 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
       }
       setSubmitSuccess(true);
       setTimeout(() => setSubmitSuccess(false), 3000);
-      onUpdated();
+      onUpdated(mutationPatch);
     } catch {
       setSubmitError('Не удалось сохранить изменения.');
     } finally {
@@ -178,16 +186,7 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
         </FormSection>
 
         <FormSection title="Чеклист">
-          <ChecklistEditor
-            value={checklists}
-            onChange={setChecklists}
-            n8nBaseUrl={n8nBaseUrl}
-            context={{
-              issue_type: fallbackIssueType,
-              summary,
-              description,
-            }}
-          />
+          <ChecklistEditor value={checklists} onChange={setChecklists} />
         </FormSection>
 
         {comments.length > 0 && (

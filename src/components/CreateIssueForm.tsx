@@ -80,6 +80,7 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
         slService,
         productCatalog,
         labels: labels.length ? labels : undefined,
+        checklists: checklists.length ? checklists : undefined,
       });
       onCreated({
         key,
