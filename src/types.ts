@@ -72,6 +72,8 @@ export interface TaskMutationPatch {
   status?: string;
   priority?: string;
   issuetype?: string;
+  parent_key?: string | null;
+  epic_key?: string | null;
   labels?: string[];
   created?: string;
   updated?: string;
@@ -245,5 +247,4 @@ export interface AiGenerateResponse {
   description: string;
   priority: string;
   issuetype: string;
-  checklists?: ChecklistItem[];
 }

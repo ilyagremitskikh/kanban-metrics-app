@@ -102,23 +102,3 @@ export async function aiOptimize(
     body: { field_type: fieldType, text, ...context },
   });
 }
-
-export interface AiChecklistContext {
-  issue_type: string;
-  summary: string;
-  description: string;
-}
-
-export async function aiChecklist(
-  n8nBaseUrl: string,
-  context: AiChecklistContext,
-): Promise<import('../types').ChecklistItem[]> {
-  const data = await requestN8nJson<unknown>(n8nBaseUrl, WEBHOOK_PATHS.aiChecklist, {
-    method: 'POST',
-    body: context,
-  });
-  if (!data || typeof data !== 'object' || !Array.isArray((data as { checklists?: unknown[] }).checklists)) {
-    return [];
-  }
-  return (data as { checklists: import('../types').ChecklistItem[] }).checklists;
-}

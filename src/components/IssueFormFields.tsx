@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   X, Plus, Trash2, ChevronsUp, ChevronUp, Minus, ChevronDown, ChevronsDown,
-  Sparkles, Loader2, Check, MinusCircle, Equal,
+  Check, MinusCircle, Equal,
 } from 'lucide-react';
 import type { ChecklistItem } from '../types';
-import { aiChecklist } from '../lib/jiraApi';
 import { normalizePriority } from '../lib/priorities';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -241,25 +240,14 @@ export function LabelsInput({ value, onChange }: LabelsInputProps) {
   );
 }
 
-// ── ChecklistEditor (с AI-генерацией) ────────────────────────────────────────
-
-export interface ChecklistContext {
-  issue_type: string;
-  summary: string;
-  description: string;
-}
+// ── ChecklistEditor ──────────────────────────────────────────────────────────
 
 interface ChecklistEditorProps {
   value: ChecklistItem[];
   onChange: (v: ChecklistItem[]) => void;
-  n8nBaseUrl?: string;
-  context?: ChecklistContext;
 }
 
-export function ChecklistEditor({ value, onChange, n8nBaseUrl, context }: ChecklistEditorProps) {
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-
+export function ChecklistEditor({ value, onChange }: ChecklistEditorProps) {
   const addItem = () => {
     const newItem: ChecklistItem = {
       name: '',
@@ -279,55 +267,9 @@ export function ChecklistEditor({ value, onChange, n8nBaseUrl, context }: Checkl
     onChange(value.filter((_, i) => i !== index));
   };
 
-  const canGenerateAi = !!(n8nBaseUrl && context?.summary?.trim());
-
-  const handleAiGenerate = async () => {
-    if (!n8nBaseUrl || !context) return;
-    setAiLoading(true);
-    setAiError(null);
-    try {
-      const generated = await aiChecklist(n8nBaseUrl, {
-        issue_type: context.issue_type,
-        summary: context.summary,
-        description: context.description,
-      });
-      // Merge: append generated items after existing ones, re-ranking
-      const merged = [
-        ...value,
-        ...generated.map((item, i) => ({ ...item, rank: value.length + i })),
-      ];
-      onChange(merged);
-    } catch {
-      setAiError('Не удалось сгенерировать чеклист. Проверьте подключение.');
-      setTimeout(() => setAiError(null), 4000);
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <Label>Чеклист</Label>
-        {canGenerateAi && (
-          <Button
-            type="button"
-            onClick={handleAiGenerate}
-            disabled={aiLoading}
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs text-blue-600 hover:text-slate-900"
-            title={context?.summary ? '' : 'Заполните заголовок задачи для генерации'}
-          >
-            {aiLoading
-              ? <><Loader2 size={12} className="animate-spin" /> Генерирую...</>
-              : <><Sparkles size={12} /> Сгенерировать с ИИ</>
-            }
-          </Button>
-        )}
-      </div>
-
-      {aiError && <p className="text-xs text-red-500">{aiError}</p>}
+      <Label>Чеклист</Label>
 
       {value.length > 0 && (
         <div className="flex flex-col gap-2">

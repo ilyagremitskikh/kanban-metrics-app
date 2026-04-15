@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Sparkles, Loader2, Send } from 'lucide-react';
 import { aiGenerate, createJiraIssue } from '../lib/jiraApi';
-import type { ChecklistItem } from '../types';
+import type { ChecklistItem, TaskMutationPatch } from '../types';
 import { normalizePriority } from '../lib/priorities';
 import AiSummaryInput from './AiSummaryInput';
 import AiDescriptionDiff from './AiDescriptionDiff';
@@ -18,15 +18,16 @@ import { cn } from '@/lib/utils';
 interface Props {
   n8nBaseUrl: string;
   availableTypes: string[];
-  onCreated: (key: string) => void;
+  onCreated: (patch: TaskMutationPatch) => void;
   onClose: () => void;
   layout?: IssueFormLayoutMode;
+  defaultIssueType?: string;
 }
 
-export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated, onClose, layout = 'sheet' }: Props) {
+export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated, onClose, layout = 'sheet', defaultIssueType }: Props) {
   const issueTypes = availableTypes.length ? availableTypes : ['User Story'];
   // AI generator state
-  const [aiIssueType, setAiIssueType] = useState(issueTypes[0]);
+  const [aiIssueType, setAiIssueType] = useState(defaultIssueType ?? issueTypes[0]);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -35,7 +36,7 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('Нормальный');
-  const [issuetype, setIssuetype] = useState(issueTypes[0]);
+  const [issuetype, setIssuetype] = useState(defaultIssueType ?? issueTypes[0]);
   const [needToUpdateSource, setNeedToUpdateSource] = useState(false);
   const [slService, setSlService] = useState('TB\\expresscredit');
   const [productCatalog, setProductCatalog] = useState('Экспресс-кредит');
@@ -56,7 +57,6 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
       setDescription(result.description ?? '');
       setPriority(normalizePriority(result.priority ?? 'Medium'));
       setIssuetype(result.issuetype ?? aiIssueType);
-      if (result.checklists?.length) setChecklists(result.checklists);
     } catch {
       setAiError('Ошибка ИИ-генерации. Проверьте подключение и повторите.');
     } finally {
@@ -70,6 +70,7 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const now = new Date().toISOString();
       const { key } = await createJiraIssue(n8nBaseUrl, {
         summary,
         description,
@@ -79,9 +80,17 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
         slService,
         productCatalog,
         labels: labels.length ? labels : undefined,
-        checklists: checklists.length ? checklists : undefined,
       });
-      onCreated(key);
+      onCreated({
+        key,
+        summary,
+        description,
+        priority,
+        issuetype,
+        labels,
+        created: now,
+        updated: now,
+      });
       onClose();
     } catch {
       setSubmitError('Не удалось создать задачу. Проверьте подключение и заполненность полей.');
@@ -209,12 +218,7 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
           </FormSection>
 
           <FormSection title="Чеклист">
-            <ChecklistEditor
-              value={checklists}
-              onChange={setChecklists}
-              n8nBaseUrl={n8nBaseUrl}
-              context={{ issue_type: issuetype, summary, description }}
-            />
+            <ChecklistEditor value={checklists} onChange={setChecklists} />
           </FormSection>
         </fieldset>
       </div>
