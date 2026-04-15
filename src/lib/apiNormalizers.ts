@@ -1,4 +1,4 @@
-import type { Issue, JiraIssueShort, RiceIssue, ThroughputIssueRaw } from '../types';
+import type { Issue, JiraIssueRef, JiraIssueShort, RiceIssue, ThroughputIssueRaw } from '../types';
 
 type RawIssue = Partial<Issue> & {
   type?: string;
@@ -9,7 +9,10 @@ type RawIssue = Partial<Issue> & {
   status?: string;
 };
 
-type RawJiraIssue = Partial<JiraIssueShort> & {
+type RawJiraIssue = Omit<Partial<JiraIssueShort>, 'children'> & {
+  parent?: JiraIssueRef | null;
+  epic?: JiraIssueRef | null;
+  children?: RawJiraIssue[];
   issue_type?: string;
   issueType?: string;
 };
@@ -57,6 +60,12 @@ export function normalizeIssue(raw: RawIssue): Issue {
 }
 
 export function normalizeJiraIssue(raw: RawJiraIssue): JiraIssueShort {
+  const parentKey = raw.parent_key ?? raw.parent?.key;
+  const epicKey = raw.epic_key ?? raw.epic?.key;
+  const children = Array.isArray(raw.children)
+    ? raw.children.map((child) => normalizeJiraIssue(child))
+    : undefined;
+
   return {
     ...raw,
     key: raw.key ?? '',
@@ -64,6 +73,11 @@ export function normalizeJiraIssue(raw: RawJiraIssue): JiraIssueShort {
     status: raw.status ?? '',
     priority: raw.priority ?? '',
     issuetype: raw.issuetype ?? raw.issue_type ?? raw.issueType ?? '',
+    parent: raw.parent ?? undefined,
+    parent_key: parentKey,
+    epic: raw.epic ?? undefined,
+    epic_key: epicKey,
+    children,
     score: toNumber(raw.score),
     rice_score: toNumber(raw.rice_score),
     bug_score: toNumber(raw.bug_score),
