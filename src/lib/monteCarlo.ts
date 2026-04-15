@@ -19,6 +19,12 @@ export interface MCResult {
   histogram: { from: number; to: number; count: number; color: string }[];
 }
 
+interface ResultPercentiles {
+  p50: number;
+  p85: number;
+  p95: number;
+}
+
 export const MC_HISTORY_START_DATE = '2026-01-12';
 export const DEFAULT_WIP_RESIDUAL_FACTOR = 0.6;
 export const DEFAULT_AGING_FLOOR = 0.25;
@@ -67,13 +73,16 @@ export function runMCDate(
     return done;
   });
 
-  return buildResult(results);
+  return buildResult(results, { p50: 50, p85: 15, p95: 5 });
 }
 
-function buildResult(sortedResults: number[]): MCResult {
-  const p50 = percentile(sortedResults, 50)!;
-  const p85 = percentile(sortedResults, 85)!;
-  const p95 = percentile(sortedResults, 95)!;
+function buildResult(
+  sortedResults: number[],
+  percentiles: ResultPercentiles = { p50: 50, p85: 85, p95: 95 },
+): MCResult {
+  const p50 = percentile(sortedResults, percentiles.p50)!;
+  const p85 = percentile(sortedResults, percentiles.p85)!;
+  const p95 = percentile(sortedResults, percentiles.p95)!;
 
   const minV = sortedResults[0];
   const maxV = sortedResults[sortedResults.length - 1];
@@ -93,7 +102,11 @@ function buildResult(sortedResults: number[]): MCResult {
 
   for (const b of bins) {
     const mid = (b.from + b.to) / 2;
-    b.color = mid <= p50 ? '#3b82f6cc' : mid <= p85 ? '#f59e0bcc' : '#ef4444cc';
+    if (p50 <= p85) {
+      b.color = mid <= p50 ? '#3b82f6cc' : mid <= p85 ? '#f59e0bcc' : '#ef4444cc';
+    } else {
+      b.color = mid <= p95 ? '#ef4444cc' : mid <= p85 ? '#f59e0bcc' : '#3b82f6cc';
+    }
   }
 
   return { p50, p85, p95, histogram: bins };

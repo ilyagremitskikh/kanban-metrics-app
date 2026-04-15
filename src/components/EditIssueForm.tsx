@@ -18,6 +18,7 @@ interface Props {
   availableTypes: string[];
   issueKey: string;
   onUpdated: (patch: TaskMutationPatch) => void;
+  onChildCreated?: (patch: TaskMutationPatch) => void;
   onClose: () => void;
   layout?: IssueFormLayoutMode;
 }
@@ -28,7 +29,7 @@ function formatDate(iso: string) {
   });
 }
 
-export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, onUpdated, onClose, layout = 'sheet' }: Props) {
+export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, onUpdated, onChildCreated, onClose, layout = 'sheet' }: Props) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const initial = useRef<JiraIssueDetailed | null>(null);
@@ -152,6 +153,8 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
   const dirtyCount = Object.keys(getDirtyFields()).length;
   const fallbackIssueType = initial.current?.issuetype ?? availableTypes[0] ?? '';
   const epicKey = initial.current?.epic_key ?? null;
+  const status = initial.current?.status ?? '';
+  const assignee = initial.current?.assignee ?? '';
 
   const handleChildCreated = (patch: TaskMutationPatch) => {
     const nextChild = {
@@ -175,29 +178,20 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
         children: [nextChild, ...(initial.current.children ?? [])],
       };
     }
-    onUpdated(patch);
+    onChildCreated?.(patch);
   };
 
   return (
     <form onSubmit={handleSave} className={cn('flex flex-col', layout === 'page' ? 'min-h-[70vh]' : 'h-full')}>
-      <div className={cn('flex flex-1 flex-col gap-4 overflow-y-auto', layout === 'page' ? 'px-0 py-1' : 'px-6 py-5')}>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge>{issueKey}</Badge>
-          <Badge variant="outline">{fallbackIssueType}</Badge>
-          {isDirty && (
-            <Badge variant="warning">
-              {dirtyCount} изм.
-            </Badge>
-          )}
-        </div>
-
-        <FormSection title="Основные поля">
-          <div className="space-y-4">
+      <div className={cn('flex-1 overflow-y-auto', layout === 'page' ? 'px-0 py-1' : 'px-6 py-5')}>
+        <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-16">
+          <div className="flex min-w-0 flex-col gap-8">
             <AiSummaryInput
               value={summary}
               onChange={setSummary}
               n8nBaseUrl={n8nBaseUrl}
               context={{ issue_type: fallbackIssueType, summary, description, comments: comments.length ? comments : undefined }}
+              variant="title"
             />
 
             <AiDescriptionDiff
@@ -207,75 +201,107 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
               context={{ issue_type: fallbackIssueType, summary, description, comments: comments.length ? comments : undefined }}
             />
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <PrioritySelect value={priority} onChange={setPriority} />
-              <LabelsInput value={labels} onChange={setLabels} />
-            </div>
+            <FormSection title="Чеклист">
+              <ChecklistEditor
+                value={checklists}
+                onChange={setChecklists}
+                n8nBaseUrl={n8nBaseUrl}
+                context={{ issue_type: fallbackIssueType, summary, description }}
+              />
+            </FormSection>
+
+            {comments.length > 0 && (
+              <FormSection title={`Комментарии (${comments.length})`}>
+                <div className="flex flex-col gap-3">
+                  {comments.map((c, i) => (
+                    <div key={i} className="rounded-md border border-border/70 bg-background px-4 py-3">
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="text-xs font-semibold text-foreground">{c.author}</span>
+                        <span className="text-xs text-muted-foreground">{formatDate(c.created)}</span>
+                      </div>
+                      <p className="whitespace-pre-wrap text-sm text-foreground/80">{c.body}</p>
+                    </div>
+                  ))}
+                </div>
+              </FormSection>
+            )}
+
+            {attachments.length > 0 && (
+              <FormSection title={`Вложения (${attachments.length})`}>
+                <div className="flex flex-wrap gap-2">
+                  {attachments.map((a, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-3 py-2 text-xs text-muted-foreground"
+                    >
+                      <Paperclip size={12} />
+                      {a.filename}
+                      <span className="text-muted-foreground/80">· {a.mimeType}</span>
+                    </div>
+                  ))}
+                </div>
+              </FormSection>
+            )}
           </div>
-        </FormSection>
 
-        <FormSection title="Чеклист">
-          <ChecklistEditor
-            value={checklists}
-            onChange={setChecklists}
-            n8nBaseUrl={n8nBaseUrl}
-            context={{ issue_type: fallbackIssueType, summary, description }}
-          />
-        </FormSection>
-
-        <ChildIssuesPanel
-          n8nBaseUrl={n8nBaseUrl}
-          availableTypes={availableTypes}
-          mode="edit"
-          parentIssue={{
-            key: issueKey,
-            issuetype: fallbackIssueType,
-            summary,
-            description,
-            status: initial.current?.status ?? '',
-            priority,
-            labels,
-            epic_key: epicKey,
-            children: children ?? [],
-          }}
-          onCreated={handleChildCreated}
-        />
-
-        {comments.length > 0 && (
-          <FormSection title={`Комментарии (${comments.length})`}>
+          <aside className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-4 lg:self-start">
             <div className="flex flex-col gap-3">
-              {comments.map((c, i) => (
-                <div key={i} className="rounded-lg border border-border bg-muted/25 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-semibold text-slate-900">{c.author}</span>
-                    <span className="text-xs text-gray-400">{formatDate(c.created)}</span>
-                  </div>
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.body}</p>
-                </div>
-              ))}
-            </div>
-          </FormSection>
-        )}
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge>{issueKey}</Badge>
+                <Badge variant="outline">{fallbackIssueType}</Badge>
+                {isDirty && (
+                  <Badge variant="warning">
+                    {dirtyCount} изм.
+                  </Badge>
+                )}
+              </div>
 
-        {attachments.length > 0 && (
-          <FormSection title={`Вложения (${attachments.length})`}>
-            <div className="flex flex-wrap gap-2">
-              {attachments.map((a, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/25 px-3 py-2 text-xs text-gray-600"
-                >
-                  <Paperclip size={12} className="text-gray-400" />
-                  {a.filename}
-                  <span className="text-gray-400">· {a.mimeType}</span>
-                </div>
-              ))}
+              <div className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Статус</span>
+                <span className="inline-flex min-w-0 items-center gap-2 font-medium text-foreground">
+                  <span className="size-2 rounded-full bg-yellow-400" />
+                  <span className="truncate">{status || 'Не указан'}</span>
+                </span>
+                {epicKey && (
+                  <>
+                    <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Эпик</span>
+                    <span className="truncate font-medium text-foreground">{epicKey}</span>
+                  </>
+                )}
+                {assignee && (
+                  <>
+                    <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Assignee</span>
+                    <span className="truncate font-medium text-foreground">{assignee}</span>
+                  </>
+                )}
+              </div>
             </div>
-          </FormSection>
-        )}
+
+            <PrioritySelect value={priority} onChange={setPriority} />
+            <LabelsInput value={labels} onChange={setLabels} />
+
+            <ChildIssuesPanel
+              n8nBaseUrl={n8nBaseUrl}
+              availableTypes={availableTypes}
+              mode="edit"
+              parentIssue={{
+                key: issueKey,
+                issuetype: fallbackIssueType,
+                summary,
+                description,
+                status: initial.current?.status ?? '',
+                priority,
+                labels,
+                epic_key: epicKey,
+                children: children ?? [],
+              }}
+              onCreated={handleChildCreated}
+            />
+          </aside>
+        </div>
       </div>
 
-      <div className={cn('flex-shrink-0 border-t border-border bg-background', layout === 'page' ? 'sticky bottom-0 px-0 py-4' : 'px-6 py-4')}>
+      <div className={cn('flex-shrink-0 border-t border-border/70 bg-background/95 backdrop-blur', layout === 'page' ? 'sticky bottom-0 px-0 py-4' : 'px-6 py-4')}>
         {submitError && <Alert variant="destructive" className="mb-3"><AlertDescription>{submitError}</AlertDescription></Alert>}
         {submitSuccess && <Alert variant="success" className="mb-3"><AlertDescription>Изменения сохранены!</AlertDescription></Alert>}
         <div className="flex items-center gap-3">
@@ -291,7 +317,7 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
           <Button
             type="button"
             onClick={onClose}
-            variant="secondary"
+            variant="ghost"
           >
             {layout === 'page' ? 'Назад к списку' : 'Закрыть'}
           </Button>

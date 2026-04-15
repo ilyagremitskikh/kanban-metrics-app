@@ -1,22 +1,11 @@
-import { useMemo, useState } from 'react';
-import { ArrowLeft, ClipboardList, Pencil, Plus, RefreshCw } from 'lucide-react';
-import type { ColumnDef } from '@tanstack/react-table';
+import { useCallback, useMemo, useState } from 'react';
+import { ArrowLeft, ClipboardList, Plus, RefreshCw } from 'lucide-react';
 
 import type { JiraIssueShort, TaskMutationPatch } from '../types';
 import CreateIssueForm from './CreateIssueForm';
 import EditIssueForm from './EditIssueForm';
-import { TypeBadge, PriorityBadge } from './Badges';
 import { getStandaloneIssueTypeOptions, getUniqueTypes } from '../lib/issueTypes';
-import {
-  EpicIssueCell,
-  IssueKeyCell,
-  ParentIssueCell,
-  StatusCell,
-  SummaryCell,
-  TaskScoreBadge,
-  type TaskScoreTone,
-} from './TaskTableCells';
-import { TasksDataTable, TasksDataTableSortHeader } from './TasksDataTable';
+import { TaskHierarchyTable, type TaskHierarchyScoreMeta, type TaskHierarchyTone } from './TaskHierarchyTable';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { EmptyState, SectionCard, StatusHint } from '@/components/ui/admin';
@@ -24,6 +13,7 @@ import { EmptyState, SectionCard, StatusHint } from '@/components/ui/admin';
 interface Props {
   n8nBaseUrl: string;
   issues: JiraIssueShort[];
+  hierarchyIssues?: JiraIssueShort[];
   loading: boolean;
   refreshing: boolean;
   error: string | null;
@@ -37,7 +27,6 @@ interface Props {
 
 type IssuesViewMode = { mode: 'list' } | { mode: 'create' } | { mode: 'edit'; issueKey: string };
 type IssueScoreKind = 'rice' | 'bug' | 'techdebt';
-type SortField = 'key' | 'score';
 
 function normalizeType(type: string): string {
   return type.trim().toLowerCase();
@@ -50,7 +39,7 @@ function getIssueScoreKind(issue: JiraIssueShort): IssueScoreKind {
   return 'rice';
 }
 
-function riceScoreTone(score: number | null, max: number): TaskScoreTone {
+function riceScoreTone(score: number | null, max: number): TaskHierarchyTone {
   if (score === null || max === 0) return 'muted';
   const pct = score / max;
   if (pct >= 0.66) return 'primary';
@@ -58,7 +47,7 @@ function riceScoreTone(score: number | null, max: number): TaskScoreTone {
   return 'muted';
 }
 
-function bugScoreTone(score: number | null): TaskScoreTone {
+function bugScoreTone(score: number | null): TaskHierarchyTone {
   if (score === null) return 'muted';
   if (score >= 75) return 'danger';
   if (score >= 50) return 'orange';
@@ -66,7 +55,7 @@ function bugScoreTone(score: number | null): TaskScoreTone {
   return 'muted';
 }
 
-function tdQuadrant(impact: number | null | undefined, effort: number | null | undefined): { tone: TaskScoreTone } | null {
+function tdQuadrant(impact: number | null | undefined, effort: number | null | undefined): { tone: TaskHierarchyTone } | null {
   if (impact == null || effort == null || effort === 0) return null;
   if (impact > 5 && effort <= 5) return { tone: 'primary' };
   if (impact > 5 && effort > 5) return { tone: 'primary' };
@@ -77,7 +66,7 @@ function tdQuadrant(impact: number | null | undefined, effort: number | null | u
 function getIssueScoreMeta(
   issue: JiraIssueShort,
   maxRiceScore: number,
-): { value: number; label: 'RICE' | 'BUG' | 'ROI'; tone: TaskScoreTone } | null {
+): TaskHierarchyScoreMeta | null {
   const kind = getIssueScoreKind(issue);
 
   if (kind === 'rice') {
@@ -101,14 +90,10 @@ function getIssueScoreMeta(
   };
 }
 
-function compareIssueKeys(a: string, b: string, dir: 'asc' | 'desc'): number {
-  const result = a.localeCompare(b, 'ru', { numeric: true, sensitivity: 'base' });
-  return dir === 'asc' ? result : -result;
-}
-
 export default function IssuesTab({
   n8nBaseUrl,
   issues,
+  hierarchyIssues,
   loading,
   refreshing,
   error,
@@ -120,8 +105,6 @@ export default function IssuesTab({
   defaultIssueType,
 }: Props) {
   const [viewMode, setViewMode] = useState<IssuesViewMode>({ mode: 'list' });
-  const [sortField, setSortField] = useState<SortField>('key');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const handleCreated = (patch: TaskMutationPatch) => {
     setViewMode({ mode: 'list' });
@@ -151,126 +134,10 @@ export default function IssuesTab({
     return values.length ? Math.max(...values) : 0;
   }, [issues]);
 
-  const sortedIssues = useMemo(() => {
-    const rows = [...issues];
-
-    rows.sort((left, right) => {
-      if (sortField === 'score') {
-        const leftScore = getIssueScoreMeta(left, maxRiceScore)?.value ?? null;
-        const rightScore = getIssueScoreMeta(right, maxRiceScore)?.value ?? null;
-
-        if (leftScore === null && rightScore === null) return compareIssueKeys(left.key, right.key, 'desc');
-        if (leftScore === null) return 1;
-        if (rightScore === null) return -1;
-        if (leftScore !== rightScore) return sortDir === 'desc' ? rightScore - leftScore : leftScore - rightScore;
-      }
-
-      return compareIssueKeys(left.key, right.key, sortField === 'key' ? sortDir : 'desc');
-    });
-
-    return rows;
-  }, [issues, maxRiceScore, sortDir, sortField]);
-
-  const columns = useMemo<ColumnDef<JiraIssueShort>[]>(() => [
-    {
-      id: 'key',
-      header: () => (
-        <TasksDataTableSortHeader
-          active={sortField === 'key'}
-          dir={sortField === 'key' ? sortDir : 'desc'}
-          onClick={() => {
-            if (sortField === 'key') {
-              setSortDir((prev) => (prev === 'desc' ? 'asc' : 'desc'));
-              return;
-            }
-            setSortField('key');
-            setSortDir('desc');
-          }}
-        >
-          Задача
-        </TasksDataTableSortHeader>
-      ),
-      cell: ({ row }) => <IssueKeyCell issueKey={row.original.key} />,
-    },
-    {
-      id: 'parent',
-      header: 'Родитель',
-      cell: ({ row }) => <ParentIssueCell parentKey={row.original.parent_key} />,
-    },
-    {
-      id: 'epic',
-      header: 'Эпик',
-      cell: ({ row }) => <EpicIssueCell epicKey={row.original.epic_key} />,
-    },
-    {
-      id: 'type',
-      header: 'Тип',
-      cell: ({ row }) => <TypeBadge type={row.original.issuetype || 'Не указан'} />,
-    },
-    {
-      id: 'summary',
-      header: () => (
-        <div>
-          <span>Summary</span>
-          <span className="block text-[10px] font-normal normal-case tracking-normal text-muted-foreground">контекст задачи</span>
-        </div>
-      ),
-      cell: ({ row }) => <SummaryCell>{row.original.summary}</SummaryCell>,
-    },
-    {
-      id: 'status',
-      header: 'Статус',
-      cell: ({ row }) => <StatusCell status={row.original.status} />,
-    },
-    {
-      id: 'priority',
-      header: 'Приоритет',
-      cell: ({ row }) => <PriorityBadge priority={row.original.priority} />,
-    },
-    {
-      id: 'score',
-      header: () => (
-        <TasksDataTableSortHeader
-          active={sortField === 'score'}
-          dir={sortField === 'score' ? sortDir : 'desc'}
-          align="center"
-          onClick={() => {
-            if (sortField === 'score') {
-              setSortDir((prev) => (prev === 'desc' ? 'asc' : 'desc'));
-              return;
-            }
-            setSortField('score');
-            setSortDir('desc');
-          }}
-        >
-          Score
-        </TasksDataTableSortHeader>
-      ),
-      cell: ({ row }) => {
-        const score = getIssueScoreMeta(row.original, maxRiceScore);
-        return score ? (
-          <TaskScoreBadge value={score.value} label={score.label} tone={score.tone} />
-        ) : (
-          <span className="text-base text-gray-300">—</span>
-        );
-      },
-    },
-    {
-      id: 'actions',
-      header: '',
-      cell: ({ row }) => (
-        <Button
-          onClick={() => setViewMode({ mode: 'edit', issueKey: row.original.key })}
-          variant="secondary"
-          size="icon"
-          className="size-8 opacity-0 transition-opacity group-hover:opacity-100"
-          title="Редактировать"
-        >
-          <Pencil size={13} />
-        </Button>
-      ),
-    },
-  ], [maxRiceScore, sortDir, sortField]);
+  const getScoreMeta = useCallback(
+    (issue: JiraIssueShort) => getIssueScoreMeta(issue, maxRiceScore),
+    [maxRiceScore],
+  );
 
   if (viewMode.mode !== 'list') {
     return (
@@ -300,6 +167,7 @@ export default function IssuesTab({
               availableTypes={availableTypes}
               issueKey={viewMode.issueKey}
               onUpdated={handleUpdated}
+              onChildCreated={onTaskMutated}
               onClose={() => setViewMode({ mode: 'list' })}
               layout="page"
             />
@@ -315,13 +183,13 @@ export default function IssuesTab({
         <div className="space-y-1">
           {!embedded ? <h2 className="text-2xl font-semibold tracking-tight text-foreground">Задачи</h2> : null}
           <div className="text-sm text-muted-foreground">
-            {sortedIssues.length} {sortedIssues.length === 1 ? 'тикет' : sortedIssues.length < 5 ? 'тикета' : 'тикетов'} в общем списке
+            {issues.length} {issues.length === 1 ? 'тикет' : issues.length < 5 ? 'тикета' : 'тикетов'} в общем списке
           </div>
           {!embedded && error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
           {!embedded && !error && lastUpdatedText ? <StatusHint>{lastUpdatedText}</StatusHint> : null}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {!embedded ? (
             <Button onClick={onRefresh} disabled={loading} variant="secondary" title="Обновить">
               <RefreshCw size={14} className={loading || refreshing ? 'animate-spin' : ''} />
@@ -343,12 +211,14 @@ export default function IssuesTab({
       )}
 
       {(issues.length > 0 || loading) && (
-        <TasksDataTable
-          data={sortedIssues}
-          columns={columns}
-          getRowId={(issue) => issue.key}
-          footerText={`${sortedIssues.length} ${sortedIssues.length === 1 ? 'тикет' : sortedIssues.length < 5 ? 'тикета' : 'тикетов'} в таблице`}
+        <TaskHierarchyTable
+          issues={issues}
+          loading={loading}
+          footerText={`${issues.length} ${issues.length === 1 ? 'тикет' : issues.length < 5 ? 'тикета' : 'тикетов'} в таблице`}
           emptyTitle={loading ? 'Загружаем тикеты…' : 'Тикеты не найдены'}
+          getScoreMeta={getScoreMeta}
+          hierarchyIssues={hierarchyIssues}
+          onEditIssue={(issueKey) => setViewMode({ mode: 'edit', issueKey })}
         />
       )}
     </div>

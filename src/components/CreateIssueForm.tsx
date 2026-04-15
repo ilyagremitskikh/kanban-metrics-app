@@ -13,7 +13,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -106,139 +105,142 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
 
   return (
     <form onSubmit={handleSubmit} className={cn('flex flex-col', layout === 'page' ? 'min-h-[70vh]' : 'h-full')}>
-      <div className={cn('flex flex-1 flex-col gap-4 overflow-y-auto', layout === 'page' ? 'px-0 py-1' : 'px-6 py-5')}>
-        <FormSection
-          title="ИИ-черновик"
-          className="border-blue-200 bg-blue-50/50"
-        >
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <Label className="mb-2 block">Тип задачи</Label>
-              <select
-                value={aiIssueType}
-                onChange={e => setAiIssueType(e.target.value)}
-                disabled={formDisabled}
-                className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm
-                  focus:border-blue-600 focus:ring-2 focus:ring-blue-100 focus:outline-none
-                  transition-all duration-200 cursor-pointer disabled:opacity-60"
-              >
-                {issueTypes.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
+      <div className={cn('flex-1 overflow-y-auto', layout === 'page' ? 'px-0 py-1' : 'px-6 py-5')}>
+        <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-16">
+          <div className="flex min-w-0 flex-col gap-8">
+            <FormSection title="ИИ-черновик" className="rounded-md border border-violet-100 bg-violet-50/30 p-4">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                  <Label className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Тип задачи</Label>
+                  <select
+                    value={aiIssueType}
+                    onChange={e => setAiIssueType(e.target.value)}
+                    disabled={formDisabled}
+                    className="h-9 w-full cursor-pointer rounded-md border border-transparent bg-transparent px-2 text-sm font-medium text-foreground transition-colors hover:bg-background/80 focus:border-border focus:bg-background focus:ring-1 focus:ring-border focus:outline-none disabled:opacity-60"
+                  >
+                    {issueTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
 
-            <div className="flex flex-col gap-1">
-              <Label className="mb-2 block">Контекст задачи</Label>
-              <Textarea
-                value={aiPrompt}
-                onChange={e => setAiPrompt(e.target.value)}
-                disabled={formDisabled}
-                placeholder="Опишите задачу в свободной форме. Например: «Нужна кнопка экспорта отчёта в PDF с выбором периода»"
-                rows={3}
-                className="min-h-[90px] resize-none border-white/60 bg-white disabled:opacity-60"
+                <div className="flex flex-col gap-2">
+                  <Label className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Контекст задачи</Label>
+                  <Textarea
+                    value={aiPrompt}
+                    onChange={e => setAiPrompt(e.target.value)}
+                    disabled={formDisabled}
+                    placeholder="Опишите задачу в свободной форме. Например: «Нужна кнопка экспорта отчёта в PDF с выбором периода»"
+                    rows={3}
+                    className="min-h-[96px] resize-none border-transparent bg-transparent shadow-none hover:bg-background/70 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-border disabled:opacity-60"
+                  />
+                </div>
+
+                {aiError && <p className="text-xs text-red-600">{aiError}</p>}
+
+                <Button
+                  type="button"
+                  onClick={handleAiGenerate}
+                  disabled={formDisabled || !aiPrompt.trim()}
+                  variant="ghost"
+                  className="self-start px-0 text-violet-500 hover:bg-transparent hover:text-violet-700"
+                >
+                  {aiLoading
+                    ? <><Loader2 size={14} className="animate-spin" /> Нейросеть формирует задачу...</>
+                    : <><Sparkles size={14} /> Сгенерировать</>
+                  }
+                </Button>
+              </div>
+            </FormSection>
+
+            <fieldset disabled={formDisabled} className="flex flex-col gap-8 disabled:opacity-60">
+              <AiSummaryInput
+                value={summary}
+                onChange={setSummary}
+                n8nBaseUrl={n8nBaseUrl}
+                context={{ issue_type: issuetype, summary, description }}
+                variant="title"
               />
-            </div>
 
-            {aiError && <p className="text-xs text-red-600">{aiError}</p>}
+              <AiDescriptionDiff
+                value={description}
+                onChange={setDescription}
+                n8nBaseUrl={n8nBaseUrl}
+                context={{ issue_type: issuetype, summary, description }}
+              />
 
-            <Button
-              type="button"
-              onClick={handleAiGenerate}
-              disabled={formDisabled || !aiPrompt.trim()}
-              className="self-start"
-            >
-              {aiLoading
-                ? <><Loader2 size={14} className="animate-spin" /> Нейросеть формирует задачу...</>
-                : <><Sparkles size={14} /> Сгенерировать</>
-              }
-            </Button>
+              <FormSection title="Чеклист">
+                <ChecklistEditor
+                  value={checklists}
+                  onChange={setChecklists}
+                  n8nBaseUrl={n8nBaseUrl}
+                  context={{ issue_type: issuetype, summary, description }}
+                />
+              </FormSection>
+            </fieldset>
           </div>
-        </FormSection>
 
-        <fieldset disabled={formDisabled} className="flex flex-col gap-4 disabled:opacity-60">
-          <AiSummaryInput
-            value={summary}
-            onChange={setSummary}
-            n8nBaseUrl={n8nBaseUrl}
-            context={{ issue_type: issuetype, summary, description }}
-          />
+          <aside className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-4 lg:self-start">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Задача</span>
+              <span className="text-sm font-medium text-foreground">New issue</span>
+            </div>
 
-          <AiDescriptionDiff
-            value={description}
-            onChange={setDescription}
-            n8nBaseUrl={n8nBaseUrl}
-            context={{ issue_type: issuetype, summary, description }}
-          />
-
-          <FormSection title="Основные поля">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <PrioritySelect value={priority} onChange={setPriority} />
+            <fieldset disabled={formDisabled} className="flex flex-col gap-5 disabled:opacity-60">
               <IssueTypeSelect value={issuetype} availableTypes={issueTypes} onChange={setIssuetype} />
-            </div>
-          </FormSection>
+              <PrioritySelect value={priority} onChange={setPriority} />
+              <LabelsInput value={labels} onChange={setLabels} />
 
-          <FormSection title="Служебные атрибуты">
-            <div
-              className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/20 p-4"
-              onClick={() => setNeedToUpdateSource(v => !v)}
-            >
-              <input
-                type="checkbox"
-                checked={needToUpdateSource}
-                onChange={e => setNeedToUpdateSource(e.target.checked)}
-                onClick={e => e.stopPropagation()}
-                className="mt-0.5 w-4 h-4 rounded accent-blue-600 flex-shrink-0 cursor-pointer"
+              <FormSection title="Служебные атрибуты">
+                <div className="flex flex-col gap-4">
+                  <div
+                    className="flex cursor-pointer items-start gap-3 rounded-md border border-transparent px-2 py-2 transition-colors hover:bg-muted/60"
+                    onClick={() => setNeedToUpdateSource(v => !v)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={needToUpdateSource}
+                      onChange={e => setNeedToUpdateSource(e.target.checked)}
+                      onClick={e => e.stopPropagation()}
+                      className="mt-0.5 h-4 w-4 flex-shrink-0 cursor-pointer rounded accent-slate-700"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Нужно обновить информацию в источнике?</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">Отметьте, если после выполнения задачи необходимо обновить документацию или источник данных</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">SL Service</Label>
+                    <Input
+                      type="text"
+                      value={slService}
+                      onChange={e => setSlService(e.target.value)}
+                      className="border-transparent bg-transparent shadow-none hover:bg-muted/60 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-border"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Product Catalog</Label>
+                    <Input
+                      type="text"
+                      value={productCatalog}
+                      onChange={e => setProductCatalog(e.target.value)}
+                      className="border-transparent bg-transparent shadow-none hover:bg-muted/60 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-border"
+                    />
+                  </div>
+                </div>
+              </FormSection>
+
+              <ChildIssuesPanel
+                n8nBaseUrl={n8nBaseUrl}
+                availableTypes={issueTypes}
+                mode="create"
+                onCreated={() => undefined}
               />
-              <div>
-                <p className="text-sm font-medium text-gray-800">Нужно обновить информацию в источнике?</p>
-                <p className="text-xs text-gray-400 mt-0.5">Отметьте, если после выполнения задачи необходимо обновить документацию или источник данных</p>
-              </div>
-            </div>
-
-            <Separator className="my-4" />
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="flex flex-col gap-1">
-                <Label className="mb-2 block">SL Service</Label>
-                <Input
-                  type="text"
-                  value={slService}
-                  onChange={e => setSlService(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label className="mb-2 block">Product Catalog</Label>
-                <Input
-                  type="text"
-                  value={productCatalog}
-                  onChange={e => setProductCatalog(e.target.value)}
-                />
-              </div>
-            </div>
-          </FormSection>
-
-          <FormSection title="Метки">
-            <LabelsInput value={labels} onChange={setLabels} />
-          </FormSection>
-
-          <FormSection title="Чеклист">
-            <ChecklistEditor
-              value={checklists}
-              onChange={setChecklists}
-              n8nBaseUrl={n8nBaseUrl}
-              context={{ issue_type: issuetype, summary, description }}
-            />
-          </FormSection>
-
-          <ChildIssuesPanel
-            n8nBaseUrl={n8nBaseUrl}
-            availableTypes={issueTypes}
-            mode="create"
-            onCreated={() => undefined}
-          />
-        </fieldset>
+            </fieldset>
+          </aside>
+        </div>
       </div>
 
-      <div className={cn('flex-shrink-0 border-t border-border bg-background', layout === 'page' ? 'sticky bottom-0 px-0 py-4' : 'px-6 py-4')}>
+      <div className={cn('flex-shrink-0 border-t border-border/70 bg-background/95 backdrop-blur', layout === 'page' ? 'sticky bottom-0 px-0 py-4' : 'px-6 py-4')}>
         {submitError && <Alert variant="destructive" className="mb-3"><AlertDescription>{submitError}</AlertDescription></Alert>}
         <div className="flex items-center gap-3">
           <Button
@@ -253,7 +255,7 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
           <Button
             type="button"
             onClick={onClose}
-            variant="secondary"
+            variant="ghost"
           >
             {layout === 'page' ? 'Назад к списку' : 'Отмена'}
           </Button>

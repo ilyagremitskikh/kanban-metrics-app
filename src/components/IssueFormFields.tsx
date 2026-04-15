@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  X, Plus, Trash2, ChevronsUp, ChevronUp, Minus, ChevronDown, ChevronsDown,
-  Check, MinusCircle, Equal, Loader2, Sparkles,
+  X, Plus, Trash2, ChevronDown, Check, Loader2, Sparkles,
 } from 'lucide-react';
 import type { AiIssueContext, ChecklistItem } from '../types';
 import { aiChecklist } from '../lib/jiraApi';
@@ -17,59 +16,51 @@ import { cn } from '@/lib/utils';
 interface PriorityOption {
   value: string;
   label: string;
-  icon: React.ReactNode;
-  colorCls: string;   // Tailwind classes for text + bg
-  dotCls: string;     // dot color class
+  textCls: string;
+  dotCls: string;
 }
 
 const PRIORITY_OPTIONS: PriorityOption[] = [
   {
     value: 'Неотложный',
     label: 'Неотложный',
-    icon: <MinusCircle size={14} />,
-    colorCls: 'text-red-600 bg-red-50',
+    textCls: 'text-red-600',
     dotCls: 'bg-red-500',
   },
   {
     value: 'Срочный',
     label: 'Срочный',
-    icon: <ChevronsUp size={14} />,
-    colorCls: 'text-orange-600 bg-orange-50',
+    textCls: 'text-orange-600',
     dotCls: 'bg-orange-500',
   },
   {
     value: 'Высокий',
     label: 'Высокий',
-    icon: <ChevronUp size={14} />,
-    colorCls: 'text-orange-500 bg-orange-50',
+    textCls: 'text-orange-500',
     dotCls: 'bg-orange-400',
   },
   {
     value: 'Нормальный',
     label: 'Нормальный',
-    icon: <ChevronDown size={14} />,
-    colorCls: 'text-blue-500 bg-blue-50',
+    textCls: 'text-sky-600',
     dotCls: 'bg-blue-400',
   },
   {
     value: 'Средний',
     label: 'Средний',
-    icon: <Equal size={14} />,
-    colorCls: 'text-yellow-600 bg-yellow-50',
+    textCls: 'text-yellow-700',
     dotCls: 'bg-yellow-400',
   },
   {
     value: 'Низкий',
     label: 'Низкий',
-    icon: <ChevronsDown size={14} />,
-    colorCls: 'text-blue-400 bg-blue-50',
+    textCls: 'text-slate-500',
     dotCls: 'bg-blue-300',
   },
   {
     value: 'Незначительный',
     label: 'Незначительный',
-    icon: <Minus size={14} />,
-    colorCls: 'text-gray-400 bg-gray-100',
+    textCls: 'text-muted-foreground',
     dotCls: 'bg-gray-300',
   },
 ];
@@ -98,29 +89,26 @@ export function PrioritySelect({ value, onChange, disabled }: PrioritySelectProp
   }, [open]);
 
   return (
-    <div className="flex flex-col gap-1">
-      <Label className="mb-2 block">Приоритет</Label>
+    <div className="flex flex-col gap-2">
+      <Label className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Приоритет</Label>
       <div ref={ref} className="relative">
         <Button
           type="button"
           disabled={disabled}
           onClick={() => setOpen(o => !o)}
-          variant="secondary"
-          className={`h-10 w-full justify-start gap-2 rounded-xl border bg-background px-3 text-left text-sm shadow-none transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed
-            ${open
-              ? 'border-blue-600 ring-2 ring-blue-100 bg-white'
-              : 'border-input hover:border-slate-300'
-            }`}
+          variant="ghost"
+          className={cn(
+            'h-9 w-full justify-start gap-2 px-2 text-left text-sm shadow-none disabled:cursor-not-allowed disabled:opacity-60',
+            open ? 'bg-muted text-foreground ring-1 ring-border' : 'hover:bg-muted/70',
+          )}
         >
-          <span className={`flex h-6 w-6 items-center justify-center rounded-full ${current.colorCls}`}>
-            {current.icon}
-          </span>
-          <span className="flex-1 font-medium text-slate-800">{current.label}</span>
-          <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+          <span className={cn('size-2 rounded-full', current.dotCls)} />
+          <span className={cn('flex-1 font-medium', current.textCls)}>{current.label}</span>
+          <ChevronDown size={14} className={cn('text-muted-foreground transition-transform duration-200', open && 'rotate-180')} />
         </Button>
 
         {open && (
-          <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-border bg-background shadow-lg">
+          <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-md border border-border bg-popover shadow-lg">
             {PRIORITY_OPTIONS.map(opt => (
               <Button
                 key={opt.value}
@@ -128,18 +116,16 @@ export function PrioritySelect({ value, onChange, disabled }: PrioritySelectProp
                 onClick={() => { onChange(opt.value); setOpen(false); }}
                 variant="ghost"
                 className={cn(
-                  'h-auto w-full justify-start rounded-none px-4 py-2.5 text-sm transition-colors duration-150 hover:bg-blue-50',
-                  opt.value === normalizedValue ? 'bg-blue-50' : '',
+                  'h-auto w-full justify-start rounded-none px-3 py-2.5 text-sm transition-colors duration-150 hover:bg-muted',
+                  opt.value === normalizedValue ? 'bg-muted' : '',
                 )}
               >
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full ${opt.colorCls}`}>
-                  {opt.icon}
-                </span>
-                <span className={`font-medium ${opt.value === normalizedValue ? 'text-slate-900' : 'text-gray-700'}`}>
+                <span className={cn('size-2 rounded-full', opt.dotCls)} />
+                <span className={cn('font-medium', opt.textCls)}>
                   {opt.label}
                 </span>
                 {opt.value === normalizedValue && (
-                  <Check size={13} className="ml-auto text-blue-600" />
+                  <Check size={13} className="ml-auto text-foreground" />
                 )}
               </Button>
             ))}
@@ -162,15 +148,13 @@ interface IssueTypeSelectProps {
 export function IssueTypeSelect({ value, availableTypes, onChange, disabled }: IssueTypeSelectProps) {
   const options = availableTypes.length ? availableTypes : [value];
   return (
-    <div className="flex flex-col gap-1">
-      <Label className="mb-2 block">Тип задачи</Label>
+    <div className="flex flex-col gap-2">
+      <Label className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Тип задачи</Label>
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
         disabled={disabled}
-        className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm
-          focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100
-          focus:outline-none transition-all duration-200 cursor-pointer disabled:opacity-60"
+        className="h-9 w-full cursor-pointer rounded-md border border-transparent bg-transparent px-2 text-sm font-medium text-foreground transition-colors hover:bg-muted/70 focus:border-border focus:bg-background focus:ring-1 focus:ring-border focus:outline-none disabled:opacity-60"
       >
         {options.map(t => (
           <option key={t} value={t}>{t}</option>
@@ -210,18 +194,18 @@ export function LabelsInput({ value, onChange }: LabelsInputProps) {
   };
 
   return (
-    <div className="flex flex-col gap-1">
-      <Label className="mb-2 block">Метки (Labels)</Label>
-      <div className="flex min-h-[46px] flex-wrap gap-1.5 rounded-xl border border-input bg-background p-3 transition-all duration-200 focus-within:border-blue-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100">
+    <div className="flex flex-col gap-2">
+      <Label className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Метки (Labels)</Label>
+      <div className="flex min-h-9 flex-wrap gap-1.5 rounded-md border border-transparent bg-transparent px-2 py-1.5 transition-colors hover:bg-muted/60 focus-within:border-border focus-within:bg-background focus-within:ring-1 focus-within:ring-border">
         {value.map(label => (
-          <Badge key={label} variant="secondary" className="rounded-full px-2.5 py-1 text-xs font-medium text-slate-700">
+          <Badge key={label} variant="secondary" className="rounded-md px-2 py-1 text-xs font-medium text-slate-700">
             {label}
             <Button
               type="button"
               variant="ghost"
               size="icon"
               onClick={() => removeLabel(label)}
-              className="size-4 hover:text-red-500"
+              className="size-4 hover:bg-transparent hover:text-red-500"
             >
               <X size={11} />
             </Button>
@@ -290,7 +274,10 @@ export function ChecklistEditor({ value, onChange, n8nBaseUrl, context }: Checkl
     setAiError(null);
     try {
       const generated = await aiChecklist(n8nBaseUrl, context);
-      onChange(generated.map((item, index) => ({ ...item, rank: item.rank ?? index })));
+      onChange([
+        ...value,
+        ...generated.map((item, index) => ({ ...item, rank: value.length + index })),
+      ]);
     } catch {
       setAiError('Не удалось сгенерировать чеклист.');
     } finally {
@@ -299,32 +286,32 @@ export function ChecklistEditor({ value, onChange, n8nBaseUrl, context }: Checkl
   };
 
   return (
-    <div className="flex flex-col gap-2">
-      <Label>Чеклист</Label>
+    <div className="flex flex-col gap-3">
+      <Label className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Чеклист</Label>
 
       {value.length > 0 && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1">
           {value.map((item, i) => (
-            <div key={i} className="flex items-center gap-2 rounded-xl border border-border bg-background p-2">
+            <div key={i} className="flex items-center gap-2 rounded-md border border-transparent bg-transparent px-2 py-1.5 transition-colors hover:bg-muted/60 focus-within:border-border focus-within:bg-background focus-within:ring-1 focus-within:ring-border">
               <input
                 type="checkbox"
                 checked={item.checked}
                 onChange={e => updateItem(i, { checked: e.target.checked })}
-                className="w-4 h-4 rounded accent-blue-600 flex-shrink-0"
+                className="h-4 w-4 flex-shrink-0 rounded accent-slate-700"
               />
               <Input
                 type="text"
                 value={item.name}
                 onChange={e => updateItem(i, { name: e.target.value })}
                 placeholder="Пункт чеклиста"
-                className="flex-1"
+                className="h-8 flex-1 border-transparent bg-transparent px-1 shadow-none hover:bg-transparent focus-visible:border-transparent focus-visible:bg-transparent focus-visible:ring-0"
               />
-              <label className="flex shrink-0 items-center gap-1 text-xs text-gray-500 cursor-pointer">
+              <label className="flex shrink-0 cursor-pointer items-center gap-1 text-xs text-muted-foreground">
                 <input
                   type="checkbox"
                   checked={item.mandatory}
                   onChange={e => updateItem(i, { mandatory: e.target.checked })}
-                  className="w-3.5 h-3.5 rounded accent-blue-600"
+                  className="h-3.5 w-3.5 rounded accent-slate-700"
                 />
                 Обяз.
               </label>
@@ -333,7 +320,7 @@ export function ChecklistEditor({ value, onChange, n8nBaseUrl, context }: Checkl
                 variant="ghost"
                 size="icon"
                 onClick={() => removeItem(i)}
-                className="size-8 shrink-0 text-gray-400 hover:text-red-500"
+                className="size-8 shrink-0 text-muted-foreground hover:text-red-500"
               >
                 <Trash2 size={15} />
               </Button>
@@ -350,7 +337,7 @@ export function ChecklistEditor({ value, onChange, n8nBaseUrl, context }: Checkl
           onClick={addItem}
           variant="ghost"
           size="sm"
-          className="px-0 text-xs text-gray-500 hover:text-blue-600"
+          className="px-0 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground"
         >
           <Plus size={14} />
           Добавить пункт
@@ -363,7 +350,7 @@ export function ChecklistEditor({ value, onChange, n8nBaseUrl, context }: Checkl
             disabled={aiLoading || !canGenerateAi}
             variant="ghost"
             size="sm"
-            className="px-0 text-xs text-blue-600 hover:text-blue-700"
+            className="px-0 text-xs text-violet-500 hover:bg-transparent hover:text-violet-700"
           >
             {aiLoading
               ? <><Loader2 size={14} className="animate-spin" /> Генерирую чеклист...</>

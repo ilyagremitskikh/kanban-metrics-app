@@ -4,7 +4,7 @@ import { RefreshCw } from 'lucide-react';
 import IssuesTab from './IssuesTab';
 import { RiceSection } from './RiceSection';
 import type { JiraIssueShort, RiceIssue, TaskMutationPatch } from '../types';
-import { getAvailableIssueTypes, isBusinessType } from '../lib/issueTypes';
+import { getAvailableIssueTypes, isBusinessType, isEpicType } from '../lib/issueTypes';
 import type { RiceUpdate } from '../lib/riceApi';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +50,21 @@ function TasksSkeleton() {
       </div>
     </div>
   );
+}
+
+function issueEpicKey(issue: JiraIssueShort, issueByKey: Map<string, JiraIssueShort>, seen = new Set<string>()): string | null {
+  const directEpicKey = issue.epic_key ?? issue.epic?.key ?? null;
+  if (directEpicKey) return directEpicKey;
+
+  const parentKey = issue.parent_key ?? issue.parent?.key ?? null;
+  if (!parentKey || seen.has(parentKey)) return null;
+
+  const parent = issueByKey.get(parentKey);
+  if (!parent) return null;
+  if (isEpicType(parent.issuetype)) return parent.key;
+
+  seen.add(issue.key);
+  return issueEpicKey(parent, issueByKey, seen);
 }
 
 interface Props {
@@ -103,6 +118,25 @@ export function TasksSection({
   const downstreamIssues = useMemo(
     () => issues.filter((i) => !isBusinessType(i.issuetype)),
     [issues],
+  );
+  const epicIssues = useMemo(
+    () => issues.filter((i) => isEpicType(i.issuetype)),
+    [issues],
+  );
+  const downstreamHierarchyIssues = useMemo(
+    () => {
+      const issueByKey = new Map(issues.map((issue) => [issue.key, issue]));
+      const downstreamEpicKeys = new Set(
+        downstreamIssues
+          .map((issue) => issueEpicKey(issue, issueByKey))
+          .filter((key): key is string => Boolean(key)),
+      );
+      return [
+        ...epicIssues.filter((issue) => downstreamEpicKeys.has(issue.key)),
+        ...downstreamIssues,
+      ];
+    },
+    [downstreamIssues, epicIssues, issues],
   );
 
   const handleRefresh = () => {
@@ -194,6 +228,7 @@ export function TasksSection({
               <IssuesTab
                 n8nBaseUrl={n8nBaseUrl}
                 issues={downstreamIssues}
+                hierarchyIssues={downstreamHierarchyIssues}
                 loading={loading}
                 refreshing={refreshing}
                 error={error}

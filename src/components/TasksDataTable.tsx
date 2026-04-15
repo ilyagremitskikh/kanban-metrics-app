@@ -4,6 +4,7 @@ import {
   useReactTable,
   type ColumnDef,
   type RowData,
+  type Table as TanStackTable,
 } from '@tanstack/react-table';
 import { ChevronUp } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -20,6 +21,7 @@ interface TasksDataTableProps<TData extends RowData> {
   footerText?: string;
   maxHeight?: string;
   className?: string;
+  renderBody?: (table: TanStackTable<TData>) => ReactNode;
 }
 
 interface TasksDataTableSortHeaderProps {
@@ -73,8 +75,9 @@ export function TasksDataTable<TData extends RowData>({
   getRowId,
   emptyTitle = 'Нет данных',
   footerText,
-  maxHeight = '65vh',
+  maxHeight,
   className,
+  renderBody,
 }: TasksDataTableProps<TData>) {
   // TanStack Table owns its row model and returns non-memoizable helpers by design.
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -87,7 +90,7 @@ export function TasksDataTable<TData extends RowData>({
 
   return (
     <div className={cn('overflow-hidden rounded-2xl border border-border bg-card shadow-sm', className)}>
-      <div className="overflow-auto" style={{ maxHeight }}>
+      <div className={cn('overflow-auto', !maxHeight && 'overflow-visible')} style={maxHeight ? { maxHeight } : undefined}>
         <Table className="border-collapse">
           <TableHeader className="sticky top-0 z-20 bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -103,7 +106,7 @@ export function TasksDataTable<TData extends RowData>({
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows.length ? (
+            {renderBody ? renderBody(table) : table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow key={row.id} className="group h-12 hover:bg-muted/35">
                   {row.getVisibleCells().map((cell) => (

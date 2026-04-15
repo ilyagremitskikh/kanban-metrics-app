@@ -16,9 +16,9 @@ export function FormSection({
   children: ReactNode;
 }) {
   return (
-    <section className={cn('rounded-lg border border-border bg-card p-4 shadow-sm', className)}>
+    <section className={cn('border-t border-border/70 pt-5 first:border-t-0 first:pt-0', className)}>
       <div className={cn(description ? 'mb-3' : 'mb-2')}>
-        <div className="text-sm font-semibold text-foreground">{title}</div>
+        <div className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{title}</div>
         {description ? <div className="mt-1 text-sm text-muted-foreground">{description}</div> : null}
       </div>
       {children}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { InlineNumberInput } from './InlineNumberInput';
 import { saveRiceScores, type RiceUpdate } from '../lib/riceApi';
 import type { RiceIssue } from '../types';
 import {
@@ -16,7 +17,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState, SectionCard, StatusHint } from '@/components/ui/admin';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
@@ -219,7 +219,7 @@ interface Props {
   onSendToQueue: (items: string[]) => void;
   onSwitchToMetrics: () => void;
   onDirtyChange?: (isDirty: boolean) => void;
-  onSaved?: () => void;
+  onSaved?: (updates: RiceUpdate[]) => void;
   embedded?: boolean;
   defaultTab?: ScoringTab;
   allowedTabs?: ScoringTab[];
@@ -334,7 +334,7 @@ export function RiceSection({
       setDirtyKeys(new Set());
       onDirtyChange?.(false);
       setMsg({ text: `Успешно сохранено ${updates.length} задач`, ok: true });
-      onSaved?.();
+      onSaved?.(updates);
     } catch (e) {
       setMsg({ text: `Ошибка при сохранении: ${(e as Error).message}`, ok: false });
     } finally { setSaving(false); }
@@ -461,14 +461,11 @@ export function RiceSection({
       cell: ({ row }) => {
         const scoreRow = scores.get(row.original.key) ?? initRow(row.original);
         return (
-          <Input
+          <InlineNumberInput
             className={`h-9 w-24 rounded-xl font-semibold no-spinner ${saving ? 'border-transparent bg-transparent text-gray-400' : ''}`}
-            type="number"
-            min={0}
-            placeholder="0"
             value={scoreRow.reach}
             disabled={saving}
-            onChange={(e) => setField(row.original.key, 'reach', e.target.value)}
+            onChange={(v) => setField(row.original.key, 'reach', v)}
           />
         );
       },

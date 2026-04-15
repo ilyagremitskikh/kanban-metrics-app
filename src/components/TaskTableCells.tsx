@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react';
+import { CornerDownRight, Layers } from 'lucide-react';
 
 import { StatusBadge } from './Badges';
 import { JIRA_BASE_URL } from '../types';
+import type { JiraIssueShort } from '../types';
+import { isSubtaskType } from '../lib/issueTypes';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -65,6 +68,69 @@ export function ParentIssueCell({ parentKey }: { parentKey?: string | null }) {
 
 export function EpicIssueCell({ epicKey }: { epicKey?: string | null }) {
   return epicKey ? <HierarchyIssueCell issueKey={epicKey} /> : <span className="text-base text-gray-300">—</span>;
+}
+
+function ContextIssueLink({
+  issueKey,
+  label,
+  icon,
+}: {
+  issueKey: string;
+  label: string;
+  icon: ReactNode;
+}) {
+  return (
+    <a
+      href={`${JIRA_BASE_URL}/${issueKey}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`${label} ${issueKey}`}
+      aria-label={`${label} ${issueKey}`}
+      className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[11px] font-bold text-slate-700 underline-offset-2 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 hover:underline"
+    >
+      {icon}
+      <span>{issueKey}</span>
+    </a>
+  );
+}
+
+export function IssueContextCell({ issue }: { issue: JiraIssueShort }) {
+  const epicKey = issue.epic_key ?? issue.epic?.key ?? null;
+  const parentKey = issue.parent_key ?? issue.parent?.key ?? null;
+  const isSubtask = isSubtaskType(issue.issuetype);
+
+  if (!epicKey && !parentKey && !isSubtask) {
+    return <span className="text-base text-gray-300">—</span>;
+  }
+
+  return (
+    <div className="flex min-w-[132px] flex-wrap items-center gap-1.5">
+      {epicKey ? (
+        <ContextIssueLink
+          issueKey={epicKey}
+          label="Эпик"
+          icon={<Layers size={12} aria-hidden="true" />}
+        />
+      ) : null}
+      {parentKey ? (
+        <ContextIssueLink
+          issueKey={parentKey}
+          label="Родитель"
+          icon={<CornerDownRight size={12} aria-hidden="true" />}
+        />
+      ) : null}
+      {isSubtask ? (
+        <Badge
+          variant="outline"
+          title="Подзадача"
+          aria-label="Подзадача"
+          className="size-6 justify-center rounded-md px-0 text-slate-500"
+        >
+          <CornerDownRight size={12} aria-hidden="true" />
+        </Badge>
+      ) : null}
+    </div>
+  );
 }
 
 export function SummaryCell({ children, className }: { children: ReactNode; className?: string }) {

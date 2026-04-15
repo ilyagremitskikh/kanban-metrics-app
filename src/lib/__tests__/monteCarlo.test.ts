@@ -1,11 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   MC_HISTORY_START_DATE,
   buildMCSamplesFromWeeks,
   calculateEffectiveWip,
+  runMCDate,
+  runMCItems,
   runMCQueue,
 } from '../monteCarlo';
 import type { ThroughputWeek } from '../../types';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+
+function mockSequentialRandomValues(count: number) {
+  let i = 0;
+  vi.spyOn(Math, 'random').mockImplementation(() => {
+    const value = (i % count) / count;
+    i += 1;
+    return value;
+  });
+}
 
 describe('buildMCSamplesFromWeeks', () => {
   it('filters out weeks before the configured Monte Carlo history start date', () => {
@@ -16,6 +32,35 @@ describe('buildMCSamplesFromWeeks', () => {
     ];
 
     expect(buildMCSamplesFromWeeks(weeks)).toEqual([4, 6]);
+  });
+});
+
+describe('runMCItems', () => {
+  it('keeps higher confidence at later week counts', () => {
+    const samples = Array.from({ length: 100 }, (_, i) => i + 1);
+    mockSequentialRandomValues(samples.length);
+
+    const result = runMCItems(samples, 100, 100);
+
+    expect(result.p50).toBeLessThanOrEqual(result.p85);
+    expect(result.p85).toBeLessThanOrEqual(result.p95);
+  });
+});
+
+describe('runMCDate', () => {
+  it('maps higher confidence to lower completed-task counts', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-16T00:00:00Z'));
+    const samples = Array.from({ length: 100 }, (_, i) => i);
+    mockSequentialRandomValues(samples.length);
+
+    const result = runMCDate(samples, new Date('2026-04-23T00:00:00Z'), 100);
+
+    expect(result.p95).toBeLessThanOrEqual(result.p85);
+    expect(result.p85).toBeLessThanOrEqual(result.p50);
+    expect(result.p50).toBeCloseTo(49.5);
+    expect(result.p85).toBeCloseTo(14.85);
+    expect(result.p95).toBeCloseTo(4.95);
   });
 });
 
