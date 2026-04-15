@@ -328,7 +328,7 @@ export default function IssuesTab({
       {!loading && !error && issues.length === 0 && (
         <EmptyState
           title="Задач пока нет"
-          description={n8nBaseUrl ? 'Нажмите «Обновить», чтобы подтянуть задачи, или создайте новую задачу прямо отсюда' : 'Укажите n8n URL в настройках'}
+          description={n8nBaseUrl ? 'Данные загрузятся автоматически при открытии вкладки или по кнопке обновления' : 'Укажите n8n URL в настройках'}
           icon={<ClipboardList size={28} className="text-slate-900" />}
         />
       )}
