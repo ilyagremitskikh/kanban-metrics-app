@@ -2,12 +2,20 @@ import { useMemo, useState } from 'react';
 import { ArrowLeft, ClipboardList, Pencil, Plus, RefreshCw } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 
-import type { JiraIssueShort } from '../types';
+import type { JiraIssueShort, TaskMutationPatch } from '../types';
 import CreateIssueForm from './CreateIssueForm';
 import EditIssueForm from './EditIssueForm';
 import { TypeBadge, PriorityBadge } from './Badges';
 import { getUniqueTypes } from '../lib/issueTypes';
-import { IssueKeyCell, StatusCell, SummaryCell, TaskScoreBadge, type TaskScoreTone } from './TaskTableCells';
+import {
+  EpicIssueCell,
+  IssueKeyCell,
+  ParentIssueCell,
+  StatusCell,
+  SummaryCell,
+  TaskScoreBadge,
+  type TaskScoreTone,
+} from './TaskTableCells';
 import { TasksDataTable, TasksDataTableSortHeader } from './TasksDataTable';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -21,7 +29,9 @@ interface Props {
   error: string | null;
   lastUpdatedText: string | null;
   onRefresh: () => void;
+  onTaskMutated: (patch: TaskMutationPatch) => void;
   embedded?: boolean;
+  defaultIssueType?: string;
 }
 
 type IssuesViewMode = { mode: 'list' } | { mode: 'create' } | { mode: 'edit'; issueKey: string };
@@ -103,20 +113,22 @@ export default function IssuesTab({
   error,
   lastUpdatedText,
   onRefresh,
+  onTaskMutated,
   embedded = false,
+  defaultIssueType,
 }: Props) {
   const [viewMode, setViewMode] = useState<IssuesViewMode>({ mode: 'list' });
   const [sortField, setSortField] = useState<SortField>('key');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
-  const handleCreated = () => {
+  const handleCreated = (patch: TaskMutationPatch) => {
     setViewMode({ mode: 'list' });
-    onRefresh();
+    onTaskMutated(patch);
   };
 
-  const handleUpdated = () => {
+  const handleUpdated = (patch: TaskMutationPatch) => {
     setViewMode({ mode: 'list' });
-    onRefresh();
+    onTaskMutated(patch);
   };
 
   const availableTypes = useMemo(() => getUniqueTypes(issues), [issues]);
@@ -170,6 +182,16 @@ export default function IssuesTab({
         </TasksDataTableSortHeader>
       ),
       cell: ({ row }) => <IssueKeyCell issueKey={row.original.key} />,
+    },
+    {
+      id: 'parent',
+      header: 'Родитель',
+      cell: ({ row }) => <ParentIssueCell parentKey={row.original.parent_key} />,
+    },
+    {
+      id: 'epic',
+      header: 'Эпик',
+      cell: ({ row }) => <EpicIssueCell epicKey={row.original.epic_key} />,
     },
     {
       id: 'type',
@@ -261,6 +283,7 @@ export default function IssuesTab({
               onCreated={handleCreated}
               onClose={() => setViewMode({ mode: 'list' })}
               layout="page"
+              defaultIssueType={defaultIssueType}
             />
           ) : (
             <EditIssueForm
@@ -305,7 +328,7 @@ export default function IssuesTab({
       {!loading && !error && issues.length === 0 && (
         <EmptyState
           title="Задач пока нет"
-          description={n8nBaseUrl ? 'Данные загрузятся автоматически при открытии вкладки или по кнопке обновления' : 'Укажите n8n URL в настройках'}
+          description={n8nBaseUrl ? 'Нажмите «Обновить», чтобы подтянуть задачи, или создайте новую задачу прямо отсюда' : 'Укажите n8n URL в настройках'}
           icon={<ClipboardList size={28} className="text-slate-900" />}
         />
       )}

@@ -44,6 +44,29 @@ export function IssueKeyCell({
   );
 }
 
+function HierarchyIssueCell({ issueKey, className }: { issueKey: string; className?: string }) {
+  return (
+    <div className={cn('whitespace-nowrap pl-2', className)}>
+      <a
+        href={`${JIRA_BASE_URL}/${issueKey}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-mono text-xs font-bold text-blue-700 underline-offset-2 transition-colors duration-150 hover:text-slate-900 hover:underline"
+      >
+        {issueKey}
+      </a>
+    </div>
+  );
+}
+
+export function ParentIssueCell({ parentKey }: { parentKey?: string | null }) {
+  return parentKey ? <HierarchyIssueCell issueKey={parentKey} /> : <span className="text-base text-gray-300">—</span>;
+}
+
+export function EpicIssueCell({ epicKey }: { epicKey?: string | null }) {
+  return epicKey ? <HierarchyIssueCell issueKey={epicKey} /> : <span className="text-base text-gray-300">—</span>;
+}
+
 export function SummaryCell({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <span
