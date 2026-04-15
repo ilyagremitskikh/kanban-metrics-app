@@ -25,3 +25,6 @@ dist-ssr
 
 # Sensitive files
 credentials.json
+
+# Local git worktrees
+.worktrees/
