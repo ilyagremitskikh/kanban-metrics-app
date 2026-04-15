@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   X, Plus, Trash2, ChevronsUp, ChevronUp, Minus, ChevronDown, ChevronsDown,
-  Check, MinusCircle, Equal,
+  Check, MinusCircle, Equal, Loader2, Sparkles,
 } from 'lucide-react';
-import type { ChecklistItem } from '../types';
+import type { AiIssueContext, ChecklistItem } from '../types';
+import { aiChecklist } from '../lib/jiraApi';
 import { normalizePriority } from '../lib/priorities';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -245,9 +246,18 @@ export function LabelsInput({ value, onChange }: LabelsInputProps) {
 interface ChecklistEditorProps {
   value: ChecklistItem[];
   onChange: (v: ChecklistItem[]) => void;
+  n8nBaseUrl?: string;
+  context?: {
+    issue_type: string;
+    summary: string;
+    description: string;
+  } & AiIssueContext;
 }
 
-export function ChecklistEditor({ value, onChange }: ChecklistEditorProps) {
+export function ChecklistEditor({ value, onChange, n8nBaseUrl, context }: ChecklistEditorProps) {
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
   const addItem = () => {
     const newItem: ChecklistItem = {
       name: '',
@@ -265,6 +275,27 @@ export function ChecklistEditor({ value, onChange }: ChecklistEditorProps) {
 
   const removeItem = (index: number) => {
     onChange(value.filter((_, i) => i !== index));
+  };
+
+  const canGenerateAi = Boolean(
+    n8nBaseUrl
+    && context?.issue_type
+    && ((context.summary ?? '').trim() || (context.description ?? '').trim()),
+  );
+
+  const handleAiGenerate = async () => {
+    if (!n8nBaseUrl || !context || !canGenerateAi) return;
+
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const generated = await aiChecklist(n8nBaseUrl, context);
+      onChange(generated.map((item, index) => ({ ...item, rank: item.rank ?? index })));
+    } catch {
+      setAiError('Не удалось сгенерировать чеклист.');
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   return (
@@ -311,16 +342,36 @@ export function ChecklistEditor({ value, onChange }: ChecklistEditorProps) {
         </div>
       )}
 
-      <Button
-        type="button"
-        onClick={addItem}
-        variant="ghost"
-        size="sm"
-        className="self-start px-0 text-xs text-gray-500 hover:text-blue-600"
-      >
-        <Plus size={14} />
-        Добавить пункт
-      </Button>
+      {aiError && <p className="text-xs text-red-600">{aiError}</p>}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          onClick={addItem}
+          variant="ghost"
+          size="sm"
+          className="px-0 text-xs text-gray-500 hover:text-blue-600"
+        >
+          <Plus size={14} />
+          Добавить пункт
+        </Button>
+
+        {n8nBaseUrl && context && (
+          <Button
+            type="button"
+            onClick={handleAiGenerate}
+            disabled={aiLoading || !canGenerateAi}
+            variant="ghost"
+            size="sm"
+            className="px-0 text-xs text-blue-600 hover:text-blue-700"
+          >
+            {aiLoading
+              ? <><Loader2 size={14} className="animate-spin" /> Генерирую чеклист...</>
+              : <><Sparkles size={14} /> Сгенерировать с ИИ</>
+            }
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

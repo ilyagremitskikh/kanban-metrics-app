@@ -6,7 +6,7 @@ import type { JiraIssueShort, TaskMutationPatch } from '../types';
 import CreateIssueForm from './CreateIssueForm';
 import EditIssueForm from './EditIssueForm';
 import { TypeBadge, PriorityBadge } from './Badges';
-import { getUniqueTypes } from '../lib/issueTypes';
+import { getStandaloneIssueTypeOptions, getUniqueTypes } from '../lib/issueTypes';
 import {
   EpicIssueCell,
   IssueKeyCell,
@@ -30,6 +30,7 @@ interface Props {
   lastUpdatedText: string | null;
   onRefresh: () => void;
   onTaskMutated: (patch: TaskMutationPatch) => void;
+  availableTypes?: string[];
   embedded?: boolean;
   defaultIssueType?: string;
 }
@@ -114,6 +115,7 @@ export default function IssuesTab({
   lastUpdatedText,
   onRefresh,
   onTaskMutated,
+  availableTypes: allAvailableTypes,
   embedded = false,
   defaultIssueType,
 }: Props) {
@@ -131,7 +133,14 @@ export default function IssuesTab({
     onTaskMutated(patch);
   };
 
-  const availableTypes = useMemo(() => getUniqueTypes(issues), [issues]);
+  const availableTypes = useMemo(
+    () => allAvailableTypes?.length ? allAvailableTypes : getUniqueTypes(issues),
+    [allAvailableTypes, issues],
+  );
+  const standaloneIssueTypes = useMemo(
+    () => getStandaloneIssueTypeOptions(availableTypes),
+    [availableTypes],
+  );
 
   const maxRiceScore = useMemo(() => {
     const values = issues
@@ -279,7 +288,7 @@ export default function IssuesTab({
           {viewMode.mode === 'create' ? (
             <CreateIssueForm
               n8nBaseUrl={n8nBaseUrl}
-              availableTypes={availableTypes}
+              availableTypes={standaloneIssueTypes}
               onCreated={handleCreated}
               onClose={() => setViewMode({ mode: 'list' })}
               layout="page"

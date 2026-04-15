@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ExternalLink, Loader2, Plus } from 'lucide-react';
+import { ExternalLink, Loader2, Plus, Sparkles } from 'lucide-react';
 
-import { createJiraIssue } from '../lib/jiraApi';
+import { aiGenerate, createJiraIssue } from '../lib/jiraApi';
 import { isEpicType, getEpicChildTypeOptions, getSubtaskTypeOption } from '../lib/issueTypes';
 import { JIRA_BASE_URL, type ChecklistItem, type JiraIssueShort, type TaskMutationPatch } from '../types';
+import {
+  buildChildAiContext,
+  buildChildCreateLinks,
+  buildChildOptimisticLinks,
+  resolveChildAiDraft,
+} from './childIssueDraft';
 import { FormSection } from './IssueFormLayout';
 import { ChecklistEditor, LabelsInput, PrioritySelect } from './IssueFormFields';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -14,7 +20,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
-type ParentIssue = Pick<JiraIssueShort, 'key' | 'issuetype' | 'epic_key' | 'children'>;
+type ParentIssue = Pick<
+  JiraIssueShort,
+  'key' | 'issuetype' | 'summary' | 'description' | 'status' | 'priority' | 'labels' | 'epic_key' | 'children'
+>;
 
 interface Props {
   n8nBaseUrl: string;
@@ -65,6 +74,9 @@ export default function ChildIssuesPanel({ n8nBaseUrl, availableTypes, mode, par
   const [selectedType, setSelectedType] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [children, setChildren] = useState<JiraIssueShort[]>(parentIssue?.children ?? []);
 
   const parentType = parentIssue?.issuetype ?? '';
@@ -73,8 +85,12 @@ export default function ChildIssuesPanel({ n8nBaseUrl, availableTypes, mode, par
   const canCreate = mode === 'edit' && !!parentKey;
   const epicChildTypes = useMemo(() => getEpicChildTypeOptions(availableTypes), [availableTypes]);
   const subtaskType = useMemo(() => getSubtaskTypeOption(availableTypes), [availableTypes]);
-  const resolvedSelectedType = parentIsEpic ? (selectedType || epicChildTypes[0] || '') : 'Подзадача';
+  const resolvedSelectedType = parentIsEpic ? (selectedType || epicChildTypes[0] || '') : subtaskType;
   const actionLabel = parentIsEpic ? 'Добавить задачу в эпик' : 'Добавить подзадачу';
+  const aiContext = useMemo(
+    () => buildChildAiContext({ parentIssue, parentIsEpic }),
+    [parentIssue, parentIsEpic],
+  );
 
   useEffect(() => {
     setChildren(parentIssue?.children ?? []);
@@ -98,6 +114,38 @@ export default function ChildIssuesPanel({ n8nBaseUrl, availableTypes, mode, par
     setLabels([]);
     setChecklists([]);
     setSubmitError(null);
+    setAiPrompt('');
+    setAiError(null);
+  };
+
+  const handleAiGenerate = async () => {
+    if (!canCreate || !aiPrompt.trim()) return;
+
+    const issueType = parentIsEpic ? resolvedSelectedType : subtaskType;
+    if (!issueType) return;
+
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const result = await aiGenerate(n8nBaseUrl, issueType, aiPrompt, aiContext);
+      const draft = resolveChildAiDraft({
+        result,
+        parentIsEpic,
+        currentType: resolvedSelectedType,
+        allowedEpicTypes: epicChildTypes,
+        subtaskType,
+      });
+
+      setSummary(draft.summary);
+      setDescription(draft.description);
+      setPriority(draft.priority);
+      if (parentIsEpic && draft.issuetype) setSelectedType(draft.issuetype);
+      if (draft.checklists) setChecklists(draft.checklists);
+    } catch {
+      setAiError('ИИ не смог подготовить черновик. Проверьте подключение и попробуйте ещё раз.');
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const handleCreate = async () => {
@@ -106,8 +154,12 @@ export default function ChildIssuesPanel({ n8nBaseUrl, availableTypes, mode, par
     const issuetype = parentIsEpic ? resolvedSelectedType : subtaskType;
     if (!issuetype) return;
 
-    const parentKeyForChild = parentIsEpic ? undefined : parentKey;
-    const epicKeyForChild = parentIsEpic ? parentKey : (parentIssue?.epic_key ?? undefined);
+    const links = buildChildCreateLinks({ parentKey, parentIsEpic });
+    const optimisticLinks = buildChildOptimisticLinks({
+      parentKey,
+      parentIsEpic,
+      parentEpicKey: parentIssue?.epic_key,
+    });
 
     setSubmitting(true);
     setSubmitError(null);
@@ -120,8 +172,10 @@ export default function ChildIssuesPanel({ n8nBaseUrl, availableTypes, mode, par
         needToUpdateSource: '',
         slService: '',
         productCatalog: '',
-        parentKey: parentKeyForChild,
-        epicKey: epicKeyForChild,
+        parentKey: links.parentKey,
+        epicKey: links.epicKey,
+        parent: links.parent,
+        epic: links.epic,
         labels: labels.length ? labels : undefined,
         checklists: checklists.length ? checklists : undefined,
       });
@@ -133,8 +187,8 @@ export default function ChildIssuesPanel({ n8nBaseUrl, availableTypes, mode, par
         priority,
         issuetype,
         labels,
-        parentKey: parentKeyForChild,
-        epicKey: epicKeyForChild,
+        parentKey: optimisticLinks.parentKey,
+        epicKey: optimisticLinks.epicKey,
       });
 
       setChildren((current) => [childPatch as JiraIssueShort, ...current]);
@@ -157,6 +211,58 @@ export default function ChildIssuesPanel({ n8nBaseUrl, availableTypes, mode, par
         )}
 
         <fieldset disabled={!canCreate || submitting} className="flex flex-col gap-4 disabled:opacity-60">
+          <div className="flex flex-col gap-4 rounded-xl border border-blue-200 bg-blue-50/50 p-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+              <div className="flex flex-col gap-1">
+                <Label className="mb-2 block">Тип для ИИ</Label>
+                {parentIsEpic ? (
+                  <select
+                    value={resolvedSelectedType}
+                    onChange={(event) => setSelectedType(event.target.value)}
+                    disabled={!canCreate || aiLoading || epicChildTypes.length === 0}
+                    className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm transition-all duration-200 cursor-pointer focus:border-blue-600 focus:ring-2 focus:ring-blue-100 focus:outline-none disabled:opacity-60"
+                  >
+                    {epicChildTypes.length > 0 ? (
+                      epicChildTypes.map((typeName) => (
+                        <option key={typeName} value={typeName}>{typeName}</option>
+                      ))
+                    ) : (
+                      <option value="">Нет доступных типов</option>
+                    )}
+                  </select>
+                ) : (
+                  <Input value={subtaskType} disabled className="border-blue-200 bg-white" />
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <Label className="mb-2 block">Контекст для черновика</Label>
+                <Textarea
+                  value={aiPrompt}
+                  onChange={(event) => setAiPrompt(event.target.value)}
+                  disabled={!canCreate || aiLoading}
+                  placeholder={parentIsEpic ? 'Что нужно добавить внутри эпика' : 'Что нужно сделать в рамках родительской задачи'}
+                  rows={3}
+                  className="min-h-[90px] resize-none border-white/60 bg-white disabled:opacity-60"
+                />
+              </div>
+            </div>
+
+            {aiError && <p className="text-xs text-red-600">{aiError}</p>}
+
+            <Button
+              type="button"
+              onClick={handleAiGenerate}
+              disabled={!canCreate || aiLoading || !aiPrompt.trim() || !resolvedSelectedType}
+              className="self-start"
+            >
+              {aiLoading
+                ? <><Loader2 size={14} className="animate-spin" /> Нейросеть формирует черновик...</>
+                : <><Sparkles size={14} /> Сгенерировать</>
+              }
+            </Button>
+          </div>
+
           {parentIsEpic && (
             <div className="flex flex-col gap-1">
               <Label className="mb-2 block">Тип дочерней задачи</Label>
@@ -202,7 +308,12 @@ export default function ChildIssuesPanel({ n8nBaseUrl, availableTypes, mode, par
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <LabelsInput value={labels} onChange={setLabels} />
-            <ChecklistEditor value={checklists} onChange={setChecklists} />
+            <ChecklistEditor
+              value={checklists}
+              onChange={setChecklists}
+              n8nBaseUrl={n8nBaseUrl}
+              context={{ issue_type: parentIsEpic ? resolvedSelectedType : subtaskType, summary, description, ...aiContext }}
+            />
           </div>
 
           {submitError && (

@@ -54,4 +54,19 @@ describe('normalizeJiraIssue', () => {
     expect(normalized.epic_key).toBeUndefined();
     expect(normalized.children).toBeUndefined();
   });
+
+  it('normalizes camelCase hierarchy keys from API payloads', () => {
+    const normalized = normalizeJiraIssue({
+      key: 'TASK-4',
+      summary: 'Camel hierarchy',
+      status: 'Open',
+      priority: 'Medium',
+      issuetype: 'Sub-task',
+      parentKey: 'TASK-1',
+      epicKey: 'EPIC-2',
+    });
+
+    expect(normalized.parent_key).toBe('TASK-1');
+    expect(normalized.epic_key).toBe('EPIC-2');
+  });
 });

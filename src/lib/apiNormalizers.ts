@@ -15,6 +15,8 @@ type RawJiraIssue = Omit<Partial<JiraIssueShort>, 'children'> & {
   children?: RawJiraIssue[];
   issue_type?: string;
   issueType?: string;
+  parentKey?: string | null;
+  epicKey?: string | null;
 };
 
 type RawThroughputIssue = Partial<ThroughputIssueRaw> & {
@@ -60,8 +62,8 @@ export function normalizeIssue(raw: RawIssue): Issue {
 }
 
 export function normalizeJiraIssue(raw: RawJiraIssue): JiraIssueShort {
-  const parentKey = raw.parent_key ?? raw.parent?.key;
-  const epicKey = raw.epic_key ?? raw.epic?.key;
+  const parentKey = raw.parent_key ?? raw.parentKey ?? raw.parent?.key;
+  const epicKey = raw.epic_key ?? raw.epicKey ?? raw.epic?.key;
   const children = Array.isArray(raw.children)
     ? raw.children.map((child) => normalizeJiraIssue(child))
     : undefined;

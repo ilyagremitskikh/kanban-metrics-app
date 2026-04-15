@@ -215,7 +215,12 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
         </FormSection>
 
         <FormSection title="Чеклист">
-          <ChecklistEditor value={checklists} onChange={setChecklists} />
+          <ChecklistEditor
+            value={checklists}
+            onChange={setChecklists}
+            n8nBaseUrl={n8nBaseUrl}
+            context={{ issue_type: fallbackIssueType, summary, description }}
+          />
         </FormSection>
 
         <ChildIssuesPanel
@@ -225,6 +230,11 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
           parentIssue={{
             key: issueKey,
             issuetype: fallbackIssueType,
+            summary,
+            description,
+            status: initial.current?.status ?? '',
+            priority,
+            labels,
             epic_key: epicKey,
             children: children ?? [],
           }}

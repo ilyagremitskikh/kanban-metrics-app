@@ -154,6 +154,21 @@ export interface JiraIssueRef {
   key: string;
 }
 
+export interface AiIssueContextRef {
+  key: string;
+  issuetype?: string;
+  summary?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  labels?: string[];
+}
+
+export interface AiIssueContext {
+  parent?: AiIssueContextRef;
+  epic?: AiIssueContextRef;
+}
+
 export interface JiraIssueShort {
   key: string;
   summary: string;
@@ -219,6 +234,8 @@ export interface CreateIssueRequest {
   productCatalog: string;
   parentKey?: string;
   epicKey?: string;
+  parent?: JiraIssueRef;
+  epic?: JiraIssueRef;
   labels?: string[];
   checklists?: ChecklistItem[];
 }
@@ -235,7 +252,7 @@ export interface UpdateIssueRequest {
   checklists?: ChecklistItem[];
 }
 
-export interface OptimizeContext {
+export interface OptimizeContext extends AiIssueContext {
   issue_type?: string;
   summary?: string;
   description?: string;
@@ -247,4 +264,5 @@ export interface AiGenerateResponse {
   description: string;
   priority: string;
   issuetype: string;
+  checklists?: ChecklistItem[];
 }

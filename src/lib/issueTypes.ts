@@ -2,6 +2,16 @@ const USER_STORY_TYPE_MARKERS = ['user story', 'пользовательская
 const EPIC_TYPE_MARKERS = ['epic', 'эпик'];
 const SUBTASK_TYPE_MARKERS = ['sub-task', 'subtask', 'подзадача'];
 
+export const STANDARD_ISSUE_TYPES = [
+  'Epic',
+  'User Story',
+  'Задача',
+  'Ошибка',
+  'Техдолг',
+  'BUSINESS SUB-TASK',
+  'Подзадача',
+] as const;
+
 export function isBusinessType(issuetype: string): boolean {
   const normalized = issuetype.trim().toLowerCase();
   return USER_STORY_TYPE_MARKERS.includes(normalized) || EPIC_TYPE_MARKERS.includes(normalized);
@@ -16,7 +26,7 @@ export function isSubtaskType(issuetype: string): boolean {
   return SUBTASK_TYPE_MARKERS.some((marker) => normalized.includes(marker));
 }
 
-export function getEpicChildTypeOptions(availableTypes: string[]): string[] {
+export function getEpicChildTypeOptions(availableTypes: readonly string[]): string[] {
   return availableTypes.filter((typeName) => {
     const normalized = typeName.trim();
     if (!normalized) return false;
@@ -24,8 +34,27 @@ export function getEpicChildTypeOptions(availableTypes: string[]): string[] {
   });
 }
 
-export function getSubtaskTypeOption(availableTypes: string[]): string {
-  return availableTypes.find((typeName) => isSubtaskType(typeName)) ?? 'Подзадача';
+export function getStandaloneIssueTypeOptions(availableTypes: readonly string[]): string[] {
+  return availableTypes.filter((typeName) => {
+    const normalized = typeName.trim();
+    if (!normalized) return false;
+    return !isSubtaskType(normalized);
+  });
+}
+
+export function getSubtaskTypeOption(availableTypes: readonly string[]): string {
+  return availableTypes.find((typeName) => typeName.trim().toLowerCase() === 'подзадача')
+    ?? availableTypes.find((typeName) => isSubtaskType(typeName))
+    ?? 'Подзадача';
+}
+
+export function getAvailableIssueTypes(issues: IssueLike[]): string[] {
+  const actualTypes = getUniqueTypes(issues);
+  const standardTypes = [...STANDARD_ISSUE_TYPES];
+  const standardNormalized = new Set(standardTypes.map((typeName) => typeName.toLowerCase()));
+  const extras = actualTypes.filter((typeName) => !standardNormalized.has(typeName.toLowerCase()));
+
+  return [...standardTypes, ...extras];
 }
 
 const PALETTE = [

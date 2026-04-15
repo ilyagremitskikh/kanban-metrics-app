@@ -58,6 +58,7 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
       setDescription(result.description ?? '');
       setPriority(normalizePriority(result.priority ?? 'Medium'));
       setIssuetype(result.issuetype ?? aiIssueType);
+      if (result.checklists) setChecklists(result.checklists);
     } catch {
       setAiError('Ошибка ИИ-генерации. Проверьте подключение и повторите.');
     } finally {
@@ -220,7 +221,12 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
           </FormSection>
 
           <FormSection title="Чеклист">
-            <ChecklistEditor value={checklists} onChange={setChecklists} />
+            <ChecklistEditor
+              value={checklists}
+              onChange={setChecklists}
+              n8nBaseUrl={n8nBaseUrl}
+              context={{ issue_type: issuetype, summary, description }}
+            />
           </FormSection>
 
           <ChildIssuesPanel

@@ -1,13 +1,18 @@
+import { useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 
 import IssuesTab from './IssuesTab';
 import { RiceSection } from './RiceSection';
-import type { JiraIssueShort, RiceIssue } from '../types';
+import type { JiraIssueShort, RiceIssue, TaskMutationPatch } from '../types';
+import { getAvailableIssueTypes, isBusinessType } from '../lib/issueTypes';
+import type { RiceUpdate } from '../lib/riceApi';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SectionCard, StatusHint } from '@/components/ui/admin';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 type TasksMode = 'edit' | 'priorities';
@@ -15,7 +20,7 @@ type TasksMode = 'edit' | 'priorities';
 const MODE_COPY: Record<TasksMode, { label: string; description: string }> = {
   edit: {
     label: 'Редактирование',
-    description: 'Единая таблица всех Jira-тикетов с типами, приоритетами и score-метками.',
+    description: 'Бизнес-задачи (User Story, Epic) и Downstream (задачи, баги, техдолг).',
   },
   priorities: {
     label: 'Приоритеты',
@@ -58,7 +63,8 @@ interface Props {
   error: string | null;
   lastUpdatedText: string | null;
   onRefresh: () => void;
-  onScoringSaved?: () => void;
+  onTaskMutated: (patch: TaskMutationPatch) => void;
+  onScoringSaved?: (updates: RiceUpdate[]) => void;
   refreshBlocked: boolean;
   refreshBlockedReason: string;
   onSendToQueue: (items: string[]) => void;
@@ -77,6 +83,7 @@ export function TasksSection({
   error,
   lastUpdatedText,
   onRefresh,
+  onTaskMutated,
   onScoringSaved,
   refreshBlocked,
   refreshBlockedReason,
@@ -84,8 +91,19 @@ export function TasksSection({
   onSwitchToMetrics,
   onDirtyChange,
 }: Props) {
+  const [editSubTab, setEditSubTab] = useState<'business' | 'downstream'>('downstream');
   const modeCopy = MODE_COPY[mode];
   const hasLoadedData = issues.length > 0 || scoringIssues.length > 0;
+  const availableTypes = useMemo(() => getAvailableIssueTypes(issues), [issues]);
+
+  const businessIssues = useMemo(
+    () => issues.filter((i) => isBusinessType(i.issuetype)),
+    [issues],
+  );
+  const downstreamIssues = useMemo(
+    () => issues.filter((i) => !isBusinessType(i.issuetype)),
+    [issues],
+  );
 
   const handleRefresh = () => {
     if (refreshBlocked) return;
@@ -142,16 +160,52 @@ export function TasksSection({
         {loading && !hasLoadedData ? <TasksSkeleton /> : null}
 
         {(!loading || hasLoadedData) && mode === 'edit' ? (
-          <IssuesTab
-            n8nBaseUrl={n8nBaseUrl}
-            issues={issues}
-            loading={loading}
-            refreshing={refreshing}
-            error={error}
-            lastUpdatedText={null}
-            onRefresh={onRefresh}
-            embedded
-          />
+          <Tabs value={editSubTab} onValueChange={(v) => setEditSubTab(v as 'business' | 'downstream')}>
+            <TabsList>
+              <TabsTrigger value="business">
+                Бизнес
+                {businessIssues.length > 0 && (
+                  <Badge variant={editSubTab === 'business' ? 'default' : 'secondary'}>{businessIssues.length}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="downstream">
+                Downstream
+                {downstreamIssues.length > 0 && (
+                  <Badge variant={editSubTab === 'downstream' ? 'default' : 'secondary'}>{downstreamIssues.length}</Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="business">
+              <IssuesTab
+                n8nBaseUrl={n8nBaseUrl}
+                issues={businessIssues}
+                loading={loading}
+                refreshing={refreshing}
+                error={error}
+                lastUpdatedText={null}
+                onRefresh={onRefresh}
+                onTaskMutated={onTaskMutated}
+                availableTypes={availableTypes}
+                embedded
+                defaultIssueType="User Story"
+              />
+            </TabsContent>
+            <TabsContent value="downstream">
+              <IssuesTab
+                n8nBaseUrl={n8nBaseUrl}
+                issues={downstreamIssues}
+                loading={loading}
+                refreshing={refreshing}
+                error={error}
+                lastUpdatedText={null}
+                onRefresh={onRefresh}
+                onTaskMutated={onTaskMutated}
+                availableTypes={availableTypes}
+                embedded
+                defaultIssueType="Задача"
+              />
+            </TabsContent>
+          </Tabs>
         ) : null}
 
         {(!loading || hasLoadedData) && mode === 'priorities' ? (
@@ -168,7 +222,7 @@ export function TasksSection({
             onSendToQueue={onSendToQueue}
             onSwitchToMetrics={onSwitchToMetrics}
             onDirtyChange={onDirtyChange}
-            onSaved={onScoringSaved ?? onRefresh}
+            onSaved={onScoringSaved ?? (() => onRefresh())}
             embedded
             defaultTab="rice"
             allowedTabs={['rice', 'bugs', 'techdebt']}
