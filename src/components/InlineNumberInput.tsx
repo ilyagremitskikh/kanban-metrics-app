@@ -7,7 +7,10 @@ interface InlineNumberInputProps {
   disabled?: boolean;
   className?: string;
   min?: number;
+  max?: number;
+  step?: number;
   placeholder?: string;
+  variant?: 'default' | 'ghost';
 }
 
 /**
@@ -23,7 +26,10 @@ const InlineNumberInput = React.memo(function InlineNumberInput({
   disabled,
   className,
   min = 0,
+  max,
+  step,
   placeholder = '0',
+  variant = 'default',
 }: InlineNumberInputProps) {
   const [localValue, setLocalValue] = useState(String(value ?? ''));
   const isFocused = useRef(false);
@@ -43,9 +49,12 @@ const InlineNumberInput = React.memo(function InlineNumberInput({
       className={className}
       type="number"
       min={min}
+      max={max}
+      step={step}
       placeholder={placeholder}
       value={localValue}
       disabled={disabled}
+      variant={variant}
       onFocus={() => { isFocused.current = true; }}
       onBlur={(e) => {
         isFocused.current = false;

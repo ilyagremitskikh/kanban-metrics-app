@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { Info } from 'lucide-react';
 import { InlineNumberInput } from './InlineNumberInput';
 import { saveRiceScores, type RiceUpdate } from '../lib/riceApi';
 import type { RiceIssue } from '../types';
 import {
-  IssueKeyCell,
   StatusCell,
   SummaryCell,
   TaskScoreBadge,
@@ -18,7 +18,6 @@ import { Button } from '@/components/ui/button';
 import { EmptyState, SectionCard, StatusHint } from '@/components/ui/admin';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const IMPACT_OPTIONS = [0.25, 0.5, 1, 2, 3];
@@ -134,17 +133,29 @@ function bugSlaLabel(score: number): string {
   return 'MINOR';
 }
 
+function minimalLabelToneClass(tone: TaskScoreTone): string {
+  if (tone === 'danger') return 'border-transparent bg-red-50 text-red-700';
+  if (tone === 'orange') return 'border-transparent bg-orange-50 text-orange-700';
+  if (tone === 'warning') return 'border-transparent bg-amber-50 text-amber-700';
+  if (tone === 'primary') return 'border-transparent bg-blue-50 text-blue-700';
+  return 'border-transparent bg-muted text-muted-foreground';
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 function HeaderLabel({ title, hint, align = 'left' }: { title: string; hint?: string; align?: 'left' | 'center' }) {
   return (
-    <div className={align === 'center' ? 'text-center' : undefined}>
+    <div className={`inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-muted-foreground ${align === 'center' ? 'justify-center text-center' : ''}`}>
       <span>{title}</span>
-      {hint ? <span className="block text-[10px] font-normal normal-case tracking-normal text-muted-foreground">{hint}</span> : null}
+      {hint ? (
+        <span title={hint} aria-label={hint}>
+          <Info className="size-3 text-muted-foreground/70" />
+        </span>
+      ) : null}
     </div>
   );
 }
 
-function TableSelect({ options, value, onChange, disabled, placeholder = 'Выбрать…', getLabel = String, className = 'min-w-[10rem]' }: {
+function TableSelect({ options, value, onChange, disabled, placeholder = 'Выбрать…', getLabel = String, className = 'w-32' }: {
   options: readonly number[]; value: string; onChange: (v: string) => void;
   disabled?: boolean; placeholder?: string; getLabel?: (v: number) => string; className?: string;
 }) {
@@ -154,7 +165,10 @@ function TableSelect({ options, value, onChange, disabled, placeholder = 'Выб
       onValueChange={(nextValue) => onChange(nextValue === EMPTY_SELECT_VALUE ? '' : nextValue)}
       disabled={disabled}
     >
-      <SelectTrigger className={`h-9 rounded-xl text-sm font-semibold ${className}`}>
+      <SelectTrigger
+        variant="ghost"
+        className={`h-8 max-w-full rounded-md px-2 text-sm font-medium ${disabled ? 'text-muted-foreground' : ''} ${className}`}
+      >
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
@@ -168,29 +182,22 @@ function TableSelect({ options, value, onChange, disabled, placeholder = 'Выб
   );
 }
 
-
-function Stepper({ value, onChange, disabled, min = EFFORT_MIN, max = EFFORT_MAX, step = EFFORT_STEP }: {
+function GhostNumberInput({ value, onChange, disabled, min = EFFORT_MIN, max = EFFORT_MAX, step = EFFORT_STEP, className }: {
   value: string; onChange: (v: string) => void; disabled?: boolean;
   min?: number; max?: number; step?: number;
+  className?: string;
 }) {
-  const num = parseFloat(value) || 0;
-  const dec = (n: number) => onChange(String(Math.max(min, +(n - step).toFixed(1))));
-  const inc = (n: number) => onChange(String(Math.min(max, +(n + step).toFixed(1))));
   return (
-    <div className={`inline-flex h-9 items-center overflow-hidden rounded-xl border shadow-xs transition-colors ${disabled ? 'border-border bg-muted/35 opacity-50' : 'border-input bg-muted/35 focus-within:border-ring focus-within:bg-background focus-within:ring-2 focus-within:ring-ring/20'}`}>
-      <Button disabled={disabled} type="button"
-        variant="ghost" size="icon"
-        className={`h-9 w-8 rounded-none border-r ${disabled ? 'opacity-50' : 'hover:bg-blue-50 hover:text-blue-700'}`}
-        onClick={() => { if (!disabled) dec(num); }}>−</Button>
-      <input disabled={disabled}
-        className={`h-9 w-12 border-none bg-transparent text-center text-sm font-bold text-slate-900 outline-none no-spinner caret-slate-900 transition-colors ${disabled ? 'text-gray-400' : ''}`}
-        type="number" min={min} max={max} step={step} value={value}
-        onChange={(e) => { if (!disabled) onChange(e.target.value); }} />
-      <Button disabled={disabled} type="button"
-        variant="ghost" size="icon"
-        className={`h-9 w-8 rounded-none border-l ${disabled ? 'opacity-50' : 'hover:bg-blue-50 hover:text-blue-700'}`}
-        onClick={() => { if (!disabled) inc(num); }}>+</Button>
-    </div>
+    <InlineNumberInput
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      min={min}
+      max={max}
+      step={step}
+      variant="ghost"
+      className={`h-8 w-16 no-spinner px-2 text-right text-sm font-medium tabular-nums ${disabled ? 'text-muted-foreground' : ''} ${className ?? ''}`}
+    />
   );
 }
 
@@ -433,22 +440,13 @@ export function RiceSection({
       },
     },
     {
-      id: 'key',
-      header: () => (
-        <TasksDataTableSortHeader
-          active={sortField === 'key'}
-          dir={sortDir}
-          onClick={() => { if (sortField === 'key') setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortField('key'); setSortDir('asc'); } }}
-        >
-          Задача
-        </TasksDataTableSortHeader>
-      ),
-      cell: ({ row }) => <IssueKeyCell issueKey={row.original.key} isDirty={false} />,
-    },
-    {
       id: 'summary',
       header: () => <HeaderLabel title="Summary" hint="контекст задачи" />,
-      cell: ({ row }) => <SummaryCell>{row.original.summary}</SummaryCell>,
+      cell: ({ row }) => (
+        <SummaryCell issueKey={row.original.key} issueType={row.original.issue_type}>
+          {row.original.summary}
+        </SummaryCell>
+      ),
     },
     {
       id: 'status',
@@ -462,9 +460,10 @@ export function RiceSection({
         const scoreRow = scores.get(row.original.key) ?? initRow(row.original);
         return (
           <InlineNumberInput
-            className={`h-9 w-24 rounded-xl font-semibold no-spinner ${saving ? 'border-transparent bg-transparent text-gray-400' : ''}`}
+            className={`h-8 w-20 no-spinner px-2 text-right text-sm font-medium tabular-nums ${saving ? 'text-muted-foreground' : ''}`}
             value={scoreRow.reach}
             disabled={saving}
+            variant="ghost"
             onChange={(v) => setField(row.original.key, 'reach', v)}
           />
         );
@@ -481,7 +480,7 @@ export function RiceSection({
             value={scoreRow.impact}
             onChange={(v) => setField(row.original.key, 'impact', v)}
             disabled={saving}
-            className="min-w-[9.5rem]"
+            className="w-32"
             getLabel={(v) => `${IMPACT_LABELS[String(v)]} (${v})`}
           />
         );
@@ -498,7 +497,7 @@ export function RiceSection({
             value={scoreRow.confidence}
             onChange={(v) => setField(row.original.key, 'confidence', v)}
             disabled={saving}
-            className="min-w-[8.5rem]"
+            className="w-24"
             getLabel={(v) => `${v}%`}
           />
         );
@@ -509,7 +508,7 @@ export function RiceSection({
       header: () => <HeaderLabel title="Effort" hint="сторипоинты" />,
       cell: ({ row }) => {
         const scoreRow = scores.get(row.original.key) ?? initRow(row.original);
-        return <Stepper value={scoreRow.effort} onChange={(v) => setField(row.original.key, 'effort', v)} disabled={saving} />;
+        return <GhostNumberInput value={scoreRow.effort} onChange={(v) => setField(row.original.key, 'effort', v)} disabled={saving} />;
       },
     },
     {
@@ -529,7 +528,13 @@ export function RiceSection({
         return (
           <div className="relative text-center group/rice">
             {score !== null
-              ? <TaskScoreBadge value={score} tone={riceScoreTone(score, maxRiceScore)} />
+              ? (
+                <TaskScoreBadge
+                  value={score}
+                  tone={riceScoreTone(score, maxRiceScore)}
+                  className="rounded-md border-transparent bg-transparent px-1 text-sm font-bold text-foreground shadow-none"
+                />
+              )
               : <span className="text-gray-300 text-base">—</span>}
             <Button
               title="Установить срочно (RICE 9999)"
@@ -556,22 +561,13 @@ export function RiceSection({
       },
     },
     {
-      id: 'key',
-      header: () => (
-        <TasksDataTableSortHeader
-          active={bugSortField === 'key'}
-          dir={bugSortDir}
-          onClick={() => { if (bugSortField === 'key') setBugSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBugSortField('key'); setBugSortDir('asc'); } }}
-        >
-          Задача
-        </TasksDataTableSortHeader>
-      ),
-      cell: ({ row }) => <IssueKeyCell issueKey={row.original.key} isDirty={false} />,
-    },
-    {
       id: 'summary',
       header: () => <HeaderLabel title="Summary" hint="контекст дефекта" />,
-      cell: ({ row }) => <SummaryCell>{row.original.summary}</SummaryCell>,
+      cell: ({ row }) => (
+        <SummaryCell issueKey={row.original.key} issueType={row.original.issue_type}>
+          {row.original.summary}
+        </SummaryCell>
+      ),
     },
     {
       id: 'status',
@@ -630,8 +626,14 @@ export function RiceSection({
           <div className="text-center">
             {score !== null ? (
               <div className="flex flex-col items-center gap-1">
-                <TaskScoreBadge value={score} tone={tone} />
-                <TaskScoreLabelBadge tone={tone}>{bugSlaLabel(score)}</TaskScoreLabelBadge>
+                <TaskScoreBadge
+                  value={score}
+                  tone={tone}
+                  className="rounded-md border-transparent bg-transparent px-1 text-sm font-bold text-foreground shadow-none"
+                />
+                <TaskScoreLabelBadge tone={tone} className={`shadow-none ${minimalLabelToneClass(tone)}`}>
+                  {bugSlaLabel(score)}
+                </TaskScoreLabelBadge>
               </div>
             ) : <span className="text-gray-300 text-base">—</span>}
           </div>
@@ -651,14 +653,13 @@ export function RiceSection({
       },
     },
     {
-      id: 'key',
-      header: 'Задача',
-      cell: ({ row }) => <IssueKeyCell issueKey={row.original.key} isDirty={false} />,
-    },
-    {
       id: 'summary',
       header: () => <HeaderLabel title="Summary" hint="контекст долга" />,
-      cell: ({ row }) => <SummaryCell>{row.original.summary}</SummaryCell>,
+      cell: ({ row }) => (
+        <SummaryCell issueKey={row.original.key} issueType={row.original.issue_type}>
+          {row.original.summary}
+        </SummaryCell>
+      ),
     },
     {
       id: 'status',
@@ -670,7 +671,7 @@ export function RiceSection({
       header: () => <HeaderLabel title="Impact" hint="ценность решения (1–10)" />,
       cell: ({ row }) => {
         const tdRow = tdScores.get(row.original.key) ?? initTdRow(row.original);
-        return <Stepper value={tdRow.td_impact} onChange={(v) => setTdField(row.original.key, 'td_impact', v)} disabled={saving} min={1} max={10} step={1} />;
+        return <GhostNumberInput value={tdRow.td_impact} onChange={(v) => setTdField(row.original.key, 'td_impact', v)} disabled={saving} min={1} max={10} step={1} />;
       },
     },
     {
@@ -678,7 +679,7 @@ export function RiceSection({
       header: () => <HeaderLabel title="Effort" hint="трудозатраты (1–10)" />,
       cell: ({ row }) => {
         const tdRow = tdScores.get(row.original.key) ?? initTdRow(row.original);
-        return <Stepper value={tdRow.td_effort} onChange={(v) => setTdField(row.original.key, 'td_effort', v)} disabled={saving} min={1} max={10} step={1} />;
+        return <GhostNumberInput value={tdRow.td_effort} onChange={(v) => setTdField(row.original.key, 'td_effort', v)} disabled={saving} min={1} max={10} step={1} />;
       },
     },
     {
@@ -702,8 +703,14 @@ export function RiceSection({
           <div className="text-center">
             {roi !== null && q ? (
               <div className="flex flex-col items-center gap-1">
-                <TaskScoreBadge value={roi} tone={q.tone} />
-                <TaskScoreLabelBadge tone={q.tone}>{q.label}</TaskScoreLabelBadge>
+                <TaskScoreBadge
+                  value={roi}
+                  tone={q.tone}
+                  className="rounded-md border-transparent bg-transparent px-1 text-sm font-bold text-foreground shadow-none"
+                />
+                <TaskScoreLabelBadge tone={q.tone} className={`shadow-none ${minimalLabelToneClass(q.tone)}`}>
+                  {q.label}
+                </TaskScoreLabelBadge>
               </div>
             ) : <span className="text-gray-300 text-base">—</span>}
           </div>
@@ -741,30 +748,26 @@ export function RiceSection({
     <>
       {/* ── Sub-tab navigation ───────────────────────────────────────────── */}
       {SUB_TABS.length > 1 && <div className="mb-4 flex flex-wrap items-center gap-2">
-        <ToggleGroup
-          type="single"
-          value={scoringTab}
-          onValueChange={(value) => {
-            if (value) setScoringTab(value as ScoringTab);
-          }}
-          variant="outline"
-          className="w-fit rounded-xl border border-border bg-muted/35 p-1"
-        >
-          {SUB_TABS.map(({ id, label, scored, total }) => (
-            <ToggleGroupItem
+        {SUB_TABS.map(({ id, label, scored, total }) => {
+          const active = scoringTab === id;
+          return (
+            <button
               key={id}
-              value={id}
-              className="h-8 rounded-lg px-4 text-sm font-semibold whitespace-nowrap data-[state=on]:bg-background data-[state=on]:shadow-sm"
+              type="button"
+              aria-pressed={active}
+              onClick={() => setScoringTab(id)}
+              className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
             >
-              {label}
-              {total > 0 && (
-                <Badge variant={scoringTab === id ? 'default' : 'secondary'} className="rounded-md px-1.5 py-0.5 text-[10px] font-bold leading-none">
-                  {scored}/{total}
-                </Badge>
-              )}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+              <Badge
+                variant={active ? 'secondary' : 'outline'}
+                className="h-8 cursor-pointer gap-2 px-3 py-1.5 text-sm transition-colors hover:border-foreground/30 hover:bg-accent hover:text-accent-foreground"
+              >
+                <span>{label}</span>
+                <span className="tabular-nums">{scored}/{total}</span>
+              </Badge>
+            </button>
+          );
+        })}
       </div>}
 
       {/* ── Collapsible guide (per tab) ──────────────────────────────────── */}

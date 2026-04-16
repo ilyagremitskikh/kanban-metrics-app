@@ -9,11 +9,10 @@ import type { RiceUpdate } from '../lib/riceApi';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { SectionCard, StatusHint } from '@/components/ui/admin';
+import { SectionCard } from '@/components/ui/admin';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 type TasksMode = 'edit' | 'priorities';
 
@@ -138,6 +137,10 @@ export function TasksSection({
     },
     [downstreamIssues, epicIssues, issues],
   );
+  const editSubTabs = [
+    { id: 'business' as const, label: 'Бизнес', count: businessIssues.length },
+    { id: 'downstream' as const, label: 'Downstream', count: downstreamIssues.length },
+  ];
 
   const handleRefresh = () => {
     if (refreshBlocked) return;
@@ -150,11 +153,11 @@ export function TasksSection({
       description={modeCopy.description}
       action={(
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {lastUpdatedText ? <StatusHint>{lastUpdatedText}</StatusHint> : null}
+          {lastUpdatedText ? <span className="text-sm text-muted-foreground">{lastUpdatedText}</span> : null}
           <Button
             onClick={handleRefresh}
             disabled={loading || refreshBlocked}
-            variant="secondary"
+            variant="outline"
             title={refreshBlocked ? refreshBlockedReason : 'Обновить задачи'}
           >
             {loading || refreshing ? <Spinner /> : <RefreshCw size={14} />}
@@ -163,107 +166,110 @@ export function TasksSection({
         </div>
       )}
     >
-      <div className="space-y-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <ToggleGroup
-            type="single"
-            value={mode}
-            onValueChange={(value) => {
-              if (value) onModeChange(value as TasksMode);
-            }}
-            variant="outline"
-            className="w-fit rounded-xl border border-border bg-muted/35 p-1"
-          >
-            {Object.entries(MODE_COPY).map(([id, copy]) => (
-              <ToggleGroupItem key={id} value={id} className="rounded-lg px-4 text-sm font-semibold data-[state=on]:bg-background data-[state=on]:shadow-sm">
-                {copy.label}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-          <div className="text-sm text-muted-foreground">
-            {modeCopy.label}
-          </div>
+      <Tabs value={mode} onValueChange={(value) => onModeChange(value as TasksMode)} className="space-y-4">
+        <TabsList className="w-fit">
+          {Object.entries(MODE_COPY).map(([id, copy]) => (
+            <TabsTrigger key={id} value={id}>
+              {copy.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        <div className="space-y-4">
+          {error ? (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          {loading && !hasLoadedData ? <TasksSkeleton /> : null}
+
+          <TabsContent value="edit">
+            {(!loading || hasLoadedData) ? (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {editSubTabs.map(({ id, label, count }) => {
+                    const active = editSubTab === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setEditSubTab(id)}
+                        className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+                      >
+                        <Badge
+                          variant={active ? 'secondary' : 'outline'}
+                          className="h-8 cursor-pointer gap-2 px-3 py-1.5 text-sm transition-colors hover:border-foreground/30 hover:bg-accent hover:text-accent-foreground"
+                        >
+                          <span>{label}</span>
+                          <span className="tabular-nums">{count}</span>
+                        </Badge>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {editSubTab === 'business' ? (
+                  <IssuesTab
+                    n8nBaseUrl={n8nBaseUrl}
+                    issues={businessIssues}
+                    loading={loading}
+                    refreshing={refreshing}
+                    error={error}
+                    lastUpdatedText={null}
+                    onRefresh={onRefresh}
+                    onTaskMutated={onTaskMutated}
+                    availableTypes={availableTypes}
+                    embedded
+                    defaultIssueType="User Story"
+                  />
+                ) : null}
+
+                {editSubTab === 'downstream' ? (
+                  <IssuesTab
+                    n8nBaseUrl={n8nBaseUrl}
+                    issues={downstreamIssues}
+                    hierarchyIssues={downstreamHierarchyIssues}
+                    loading={loading}
+                    refreshing={refreshing}
+                    error={error}
+                    lastUpdatedText={null}
+                    onRefresh={onRefresh}
+                    onTaskMutated={onTaskMutated}
+                    availableTypes={availableTypes}
+                    embedded
+                    defaultIssueType="Задача"
+                  />
+                ) : null}
+              </div>
+            ) : null}
+          </TabsContent>
+
+          <TabsContent value="priorities">
+            {(!loading || hasLoadedData) ? (
+              <RiceSection
+                n8nBaseUrl={n8nBaseUrl}
+                issues={scoringIssues}
+                loading={loading}
+                refreshing={refreshing}
+                error={error}
+                lastUpdatedText={null}
+                onRefreshFromJira={onRefresh}
+                refreshBlocked={refreshBlocked}
+                refreshBlockedReason={refreshBlockedReason}
+                onSendToQueue={onSendToQueue}
+                onSwitchToMetrics={onSwitchToMetrics}
+                onDirtyChange={onDirtyChange}
+                onSaved={onScoringSaved ?? (() => onRefresh())}
+                embedded
+                defaultTab="rice"
+                allowedTabs={['rice', 'bugs', 'techdebt']}
+              />
+            ) : null}
+          </TabsContent>
         </div>
-
-        {error ? (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        {loading && !hasLoadedData ? <TasksSkeleton /> : null}
-
-        {(!loading || hasLoadedData) && mode === 'edit' ? (
-          <Tabs value={editSubTab} onValueChange={(v) => setEditSubTab(v as 'business' | 'downstream')}>
-            <TabsList>
-              <TabsTrigger value="business">
-                Бизнес
-                {businessIssues.length > 0 && (
-                  <Badge variant={editSubTab === 'business' ? 'default' : 'secondary'}>{businessIssues.length}</Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="downstream">
-                Downstream
-                {downstreamIssues.length > 0 && (
-                  <Badge variant={editSubTab === 'downstream' ? 'default' : 'secondary'}>{downstreamIssues.length}</Badge>
-                )}
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="business">
-              <IssuesTab
-                n8nBaseUrl={n8nBaseUrl}
-                issues={businessIssues}
-                loading={loading}
-                refreshing={refreshing}
-                error={error}
-                lastUpdatedText={null}
-                onRefresh={onRefresh}
-                onTaskMutated={onTaskMutated}
-                availableTypes={availableTypes}
-                embedded
-                defaultIssueType="User Story"
-              />
-            </TabsContent>
-            <TabsContent value="downstream">
-              <IssuesTab
-                n8nBaseUrl={n8nBaseUrl}
-                issues={downstreamIssues}
-                hierarchyIssues={downstreamHierarchyIssues}
-                loading={loading}
-                refreshing={refreshing}
-                error={error}
-                lastUpdatedText={null}
-                onRefresh={onRefresh}
-                onTaskMutated={onTaskMutated}
-                availableTypes={availableTypes}
-                embedded
-                defaultIssueType="Задача"
-              />
-            </TabsContent>
-          </Tabs>
-        ) : null}
-
-        {(!loading || hasLoadedData) && mode === 'priorities' ? (
-          <RiceSection
-            n8nBaseUrl={n8nBaseUrl}
-            issues={scoringIssues}
-            loading={loading}
-            refreshing={refreshing}
-            error={error}
-            lastUpdatedText={null}
-            onRefreshFromJira={onRefresh}
-            refreshBlocked={refreshBlocked}
-            refreshBlockedReason={refreshBlockedReason}
-            onSendToQueue={onSendToQueue}
-            onSwitchToMetrics={onSwitchToMetrics}
-            onDirtyChange={onDirtyChange}
-            onSaved={onScoringSaved ?? (() => onRefresh())}
-            embedded
-            defaultTab="rice"
-            allowedTabs={['rice', 'bugs', 'techdebt']}
-          />
-        ) : null}
-      </div>
+      </Tabs>
     </SectionCard>
   );
 }

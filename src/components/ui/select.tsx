@@ -8,21 +8,33 @@ const Select = SelectPrimitive.Root;
 const SelectGroup = SelectPrimitive.Group;
 const SelectValue = SelectPrimitive.Value;
 
+type SelectTriggerVariant = 'default' | 'ghost';
+
+interface SelectTriggerProps extends React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> {
+  variant?: SelectTriggerVariant;
+}
+
+const selectTriggerVariants: Record<SelectTriggerVariant, string> = {
+  default: 'border-input bg-muted/35 shadow-xs focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/20',
+  ghost: 'border-transparent bg-transparent shadow-none hover:border-border hover:bg-muted/35 focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/20',
+};
+
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
+  SelectTriggerProps
+>(({ className, children, variant = 'default', ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'flex h-9 w-full items-center justify-between rounded-md border border-input bg-muted/35 px-3 py-2 text-sm text-foreground shadow-xs outline-none transition-[color,box-shadow,border-color] data-[placeholder]:text-muted-foreground focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
+      'group flex h-9 w-full items-center justify-between rounded-md border px-3 py-2 text-sm text-foreground outline-none transition-[color,box-shadow,background-color,border-color] data-[placeholder]:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
+      selectTriggerVariants[variant],
       className,
     )}
     {...props}
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="size-4 opacity-50" />
+      <ChevronDown className={cn('size-4 transition-opacity', variant === 'ghost' ? 'opacity-0 group-hover:opacity-40 group-focus:opacity-60 group-data-[state=open]:opacity-60' : 'opacity-50')} />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));

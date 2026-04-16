@@ -6,7 +6,7 @@ import {
   type RowData,
   type Table as TanStackTable,
 } from '@tanstack/react-table';
-import { ChevronUp } from 'lucide-react';
+import { ChevronUp, Info } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -48,22 +48,24 @@ export function TasksDataTableSortHeader({
       size="sm"
       onClick={onClick}
       className={cn(
-        'h-auto w-full justify-start gap-1 rounded-md px-1 py-0.5 text-xs font-bold uppercase tracking-wide hover:bg-muted/70',
+        'h-auto w-full justify-start gap-1 rounded-md px-1 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-muted/50 hover:text-foreground',
         align === 'center' && 'justify-center text-center',
       )}
     >
-      <span className={cn('flex flex-col gap-0.5', align === 'center' ? 'items-center' : 'items-start')}>
-        <span className="inline-flex items-center gap-1">
-          {children}
-          <ChevronUp
-            className={cn(
-              'size-3.5 transition-all',
-              active ? 'text-blue-600 opacity-100' : 'text-muted-foreground opacity-35',
-              active && dir === 'desc' && 'rotate-180',
-            )}
-          />
-        </span>
-        {hint ? <span className="text-[10px] font-normal normal-case tracking-normal text-muted-foreground">{hint}</span> : null}
+      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+        {children}
+        {hint ? (
+          <span title={hint} aria-label={hint}>
+            <Info className="size-3 text-muted-foreground/70" />
+          </span>
+        ) : null}
+        <ChevronUp
+          className={cn(
+            'size-3.5 transition-all',
+            active ? 'text-foreground opacity-100' : 'text-muted-foreground opacity-35',
+            active && dir === 'desc' && 'rotate-180',
+          )}
+        />
       </span>
     </Button>
   );
@@ -89,12 +91,12 @@ export function TasksDataTable<TData extends RowData>({
   });
 
   return (
-    <div className={cn('overflow-hidden rounded-2xl border border-border bg-card shadow-sm', className)}>
-      <div className={cn('overflow-auto', !maxHeight && 'overflow-visible')} style={maxHeight ? { maxHeight } : undefined}>
-        <Table className="border-collapse">
-          <TableHeader className="sticky top-0 z-20 bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
+    <div className={cn('overflow-hidden rounded-lg border border-border bg-background font-[var(--font-sans)] tabular-nums', className)}>
+      <div className={cn('overflow-x-auto p-1.5', maxHeight ? 'overflow-y-auto' : 'overflow-y-visible')} style={maxHeight ? { maxHeight } : undefined}>
+        <Table className="min-w-max border-separate border-spacing-y-1">
+          <TableHeader className="sticky top-0 z-20 bg-background">
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id} className="bg-muted/40 hover:bg-muted/40">
+              <TableRow key={headerGroup.id} className="h-[34px] border-0 bg-background hover:bg-background">
                 {headerGroup.headers.map((header) => (
                   <TableHead key={header.id} className="whitespace-nowrap">
                     {header.isPlaceholder
@@ -108,9 +110,9 @@ export function TasksDataTable<TData extends RowData>({
           <TableBody>
             {renderBody ? renderBody(table) : table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} className="group h-12 hover:bg-muted/35">
+                <TableRow key={row.id} className="group min-h-[46px] border-0 transition-colors hover:bg-muted/50">
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="first:rounded-l-md last:rounded-r-md">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
