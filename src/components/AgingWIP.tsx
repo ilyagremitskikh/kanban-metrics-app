@@ -31,8 +31,8 @@ function deltaLabel(age: number, p: number | null): string {
 }
 
 function deltaClass(age: number, p: number | null): string {
-  if (p === null) return 'text-gray-400';
-  return age > p ? 'text-red-600 font-semibold' : 'text-emerald-600';
+  if (p === null) return 'text-muted-foreground';
+  return age > p ? 'text-rose-600 font-semibold' : 'text-emerald-600';
 }
 
 export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
@@ -68,11 +68,16 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
   useEffect(() => {
     if (!canvasRef.current || !aged.length) return;
     chartRef.current?.destroy();
+    const faintHorizontalGrid = {
+      color: 'rgba(100, 116, 139, 0.16)',
+      borderDash: [4, 4],
+      drawTicks: false,
+    } as unknown as { color: string; drawTicks: boolean };
 
     const barColors = aged.map((i) => {
-      if (p50 !== null && i.age <= p50) return '#10b981cc';
-      if (p85 !== null && i.age <= p85) return '#f59e0bcc';
-      return '#ef4444cc';
+      if (p50 !== null && i.age <= p50) return '#94a3b8';
+      if (p85 !== null && i.age <= p85) return '#c7a46b';
+      return '#c97b84';
     });
 
     const h = Math.max(200, aged.length * 28);
@@ -98,9 +103,9 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
                 type: 'line' as const,
                 label: `${metricLabel} P50 (${fmtNum(p50)} дн.)`,
                 data: aged.map(() => p50),
-                borderColor: '#6b7280',
-                borderWidth: 1.5,
-                borderDash: [3, 3],
+                borderColor: '#64748b',
+                borderWidth: 1,
+                borderDash: [6, 4],
                 pointRadius: 0,
                 fill: false,
               }]
@@ -110,9 +115,9 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
                 type: 'line' as const,
                 label: `${metricLabel} P85 (${fmtNum(p85)} дн.)`,
                 data: aged.map(() => p85),
-                borderColor: '#f59e0b',
-                borderWidth: 1.5,
-                borderDash: [4, 4],
+                borderColor: '#a16207',
+                borderWidth: 1,
+                borderDash: [6, 4],
                 pointRadius: 0,
                 fill: false,
               }]
@@ -124,7 +129,16 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+          legend: {
+            position: 'top',
+            labels: {
+              boxWidth: 10,
+              boxHeight: 10,
+              color: '#64748b',
+              font: { size: 11 },
+              usePointStyle: true,
+            },
+          },
           tooltip: {
             callbacks: {
               title: (items) => aged[items[0].dataIndex]?.key,
@@ -138,10 +152,16 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
         scales: {
           x: {
             min: 0,
-            title: { display: true, text: 'Дни в работе', font: { size: 11 } },
-            grid: { color: '#f3f4f6' },
+            title: { display: true, text: 'Дни в работе', color: '#64748b', font: { size: 11 } },
+            ticks: { color: '#64748b', font: { size: 11 } },
+            border: { display: false },
+            grid: faintHorizontalGrid,
           },
-          y: { ticks: { font: { size: 11 } }, grid: { display: false } },
+          y: {
+            ticks: { color: '#64748b', font: { size: 11 } },
+            border: { display: false },
+            grid: { display: false },
+          },
         },
       },
     });
@@ -149,7 +169,7 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
 
   useEffect(() => () => { chartRef.current?.destroy(); }, []);
 
-  if (!aged.length) return <div className="py-4 text-sm text-gray-400">Нет задач в работе</div>;
+  if (!aged.length) return <div className="py-4 text-sm text-muted-foreground">Нет задач в работе</div>;
 
   return (
     <div>
@@ -157,15 +177,15 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
         <canvas ref={canvasRef} />
       </div>
 
-      <Button variant="secondary" size="sm" className="mt-4" onClick={() => setShowTable((v) => !v)}>
+      <Button variant="ghost" size="sm" className="mt-4 w-fit" onClick={() => setShowTable((v) => !v)}>
         {showTable ? '▲ Скрыть детали' : `▼ Детали WIP (${aged.length} задач)`}
       </Button>
 
       {showTable && (
-        <div className="mt-3 overflow-x-auto rounded-lg border border-border p-2">
-          <Table className="border-collapse">
+        <div className="mt-3 overflow-x-auto rounded-lg bg-background p-2">
+          <Table className="border-collapse tabular-nums">
             <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <TableRow className="border-border/40 bg-muted/15 hover:bg-muted/15">
                 {['Задача', 'Тип', 'Текущий статус', 'Дни в работе', 'vs P50', 'vs P85'].map((h) => (
                   <TableHead key={h} className="whitespace-nowrap">
                     {h}
@@ -174,23 +194,18 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {aged.map((i) => {
-                const color =
-                  p50 !== null && i.age <= p50 ? 'green'
-                  : p85 !== null && i.age <= p85 ? 'yellow'
-                  : 'red';
-                return (
-                  <TableRow key={i.key} className={`group wip-row-${color}`}>
+              {aged.map((i) => (
+                <TableRow key={i.key} className="group border-border/40 hover:bg-muted/50">
                     <TableCell className="align-top">
                       <a
                         href={`${JIRA_BASE_URL}/${i.key}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mr-2 whitespace-nowrap font-mono font-bold text-slate-900 transition-colors hover:text-blue-700 hover:underline"
+                        className="mr-2 whitespace-nowrap font-mono text-sm font-normal text-muted-foreground transition-colors hover:text-foreground hover:underline"
                       >
                         {i.key}
                       </a>
-                      <span className="text-gray-500 transition-colors group-hover:text-slate-900">{i.summary}</span>
+                      <span className="text-foreground/75 transition-colors group-hover:text-foreground">{i.summary}</span>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       <TypeBadge type={i.type} />
@@ -198,12 +213,11 @@ export function AgingWIP({ issues, bucket, thresholdValues }: Props) {
                     <TableCell className="whitespace-nowrap">
                       <StatusBadge status={i.currentStatus} />
                     </TableCell>
-                    <TableCell className="whitespace-nowrap font-bold transition-colors group-hover:text-slate-900">{fmtNum(i.age)} дн.</TableCell>
-                    <TableCell className={`whitespace-nowrap ${deltaClass(i.age, p50)} transition-colors group-hover:text-slate-900`}>{deltaLabel(i.age, p50)}</TableCell>
-                    <TableCell className={`whitespace-nowrap ${deltaClass(i.age, p85)} transition-colors group-hover:text-slate-900`}>{deltaLabel(i.age, p85)}</TableCell>
+                    <TableCell className="whitespace-nowrap font-semibold text-foreground/80 transition-colors group-hover:text-foreground">{fmtNum(i.age)} дн.</TableCell>
+                    <TableCell className={`whitespace-nowrap ${deltaClass(i.age, p50)} transition-colors group-hover:text-foreground`}>{deltaLabel(i.age, p50)}</TableCell>
+                    <TableCell className={`whitespace-nowrap ${deltaClass(i.age, p85)} transition-colors group-hover:text-foreground`}>{deltaLabel(i.age, p85)}</TableCell>
                   </TableRow>
-                );
-              })}
+              ))}
             </TableBody>
           </Table>
         </div>

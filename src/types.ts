@@ -119,6 +119,10 @@ export interface RiceIssue {
   labels: string;
   priority: string;
   status: string;
+  parent?: JiraIssueRef | null;
+  parent_key?: string | null;
+  epic?: JiraIssueRef | null;
+  epic_key?: string | null;
   // RICE fields (User Story / Задача)
   reach: number | null;
   impact: number | null;

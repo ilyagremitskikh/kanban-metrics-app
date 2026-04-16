@@ -142,7 +142,7 @@ export function IssueKeyCell({
         href={`${JIRA_BASE_URL}/${issueKey}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-[13px] font-semibold leading-tight text-muted-foreground underline-offset-[3px] transition-colors duration-150 hover:text-foreground hover:underline"
+        className="text-[13px] font-normal leading-tight text-muted-foreground underline-offset-[3px] transition-colors duration-150 hover:text-foreground hover:underline"
       >
         {issueKey}
       </a>
@@ -239,22 +239,41 @@ export function IssueContextCell({ issue }: { issue: JiraIssueShort }) {
 export function SummaryCell({
   children,
   className,
+  epicKey,
+  epicTitle,
   issueKey,
   issueType,
 }: {
   children: ReactNode;
   className?: string;
+  epicKey?: string | null;
+  epicTitle?: string | null;
   issueKey?: string;
   issueType?: string;
 }) {
+  const epicLabel = epicTitle && epicTitle !== epicKey ? `${epicKey} · ${epicTitle}` : epicKey;
+
   if (issueKey || issueType) {
     return (
-      <div className={cn('flex w-[32rem] max-w-[32rem] items-start gap-2 py-1', className)}>
+      <div className={cn('flex w-[40rem] max-w-[40rem] items-start gap-2 py-1', className)}>
         {issueType ? <IssueTypeIcon type={issueType} /> : null}
         {issueKey ? <IssueKeyCell issueKey={issueKey} className="shrink-0 pl-0 pt-px" /> : null}
         <span className="min-w-0 whitespace-normal break-words text-sm font-semibold leading-5 text-zinc-800 transition-colors group-hover:text-zinc-950">
           {children}
         </span>
+        {epicKey ? (
+          <a
+            href={`${JIRA_BASE_URL}/${epicKey}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={epicLabel ? `Эпик ${epicLabel}` : `Эпик ${epicKey}`}
+            aria-label={epicLabel ? `Эпик ${epicLabel}` : `Эпик ${epicKey}`}
+            className="mt-[-1px] inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[11px] font-bold text-slate-700 underline-offset-2 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 hover:underline"
+          >
+            <Layers size={12} aria-hidden="true" />
+            <span>{epicKey}</span>
+          </a>
+        ) : null}
       </div>
     );
   }

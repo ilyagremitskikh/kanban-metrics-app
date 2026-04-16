@@ -36,7 +36,7 @@ export function IssuesTable({ rows }: Props) {
     return dir * String(va).localeCompare(String(vb), 'ru');
   });
 
-  const thCls = 'cursor-pointer select-none whitespace-nowrap bg-muted/60 hover:bg-muted';
+  const thCls = 'cursor-pointer select-none whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground';
 
   const th = (col: SortCol, label: string, extraCls = '') => (
     <TableHead
@@ -51,9 +51,9 @@ export function IssuesTable({ rows }: Props) {
   return (
     <SectionCard title={`Задачи (${rows.length})`}>
       <div className="overflow-x-auto">
-        <Table className="border-collapse">
+        <Table className="border-collapse tabular-nums">
           <TableHeader>
-            <TableRow className="hover:bg-transparent">
+            <TableRow className="border-border/40 bg-muted/15 hover:bg-transparent">
               {th('key', 'Ключ')}
               {th('summary', 'Название')}
               {th('type', 'Тип')}
@@ -66,37 +66,37 @@ export function IssuesTable({ rows }: Props) {
           </TableHeader>
           <TableBody>
             {sorted.map((row) => (
-              <TableRow key={row.key} className="group">
+              <TableRow key={row.key} className="group border-border/40 hover:bg-muted/50">
                 <TableCell className="whitespace-nowrap">
                   <a
                     href={`${JIRA_BASE_URL}/${row.key}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-mono text-sm font-semibold text-foreground transition-colors hover:text-primary hover:underline"
+                    className="font-mono text-sm font-normal text-muted-foreground transition-colors hover:text-foreground hover:underline"
                   >
                     {row.key}
                   </a>
                 </TableCell>
-                <TableCell className="min-w-[200px] max-w-[500px] text-slate-700 transition-colors group-hover:text-foreground">
+                <TableCell className="min-w-[200px] max-w-[500px] text-foreground/80 transition-colors group-hover:text-foreground">
                   {row.summary}
                 </TableCell>
                 <TableCell>
                   <TypeBadge type={row.type} />
                 </TableCell>
-                <TableCell className="whitespace-nowrap text-right font-semibold text-slate-700 transition-colors group-hover:text-foreground">
-                  {row.leadTime !== null ? `${fmtNum(row.leadTime)} дн.` : <span className="font-normal text-slate-300">—</span>}
+                <TableCell className="whitespace-nowrap text-right font-semibold text-foreground/80 transition-colors group-hover:text-foreground">
+                  {row.leadTime !== null ? `${fmtNum(row.leadTime)} дн.` : <span className="font-normal text-muted-foreground/40">—</span>}
                 </TableCell>
-                <TableCell className="whitespace-nowrap text-right font-semibold text-slate-700 transition-colors group-hover:text-foreground">
-                  {row.devCycleTime !== null ? `${fmtNum(row.devCycleTime)} дн.` : <span className="font-normal text-slate-300">—</span>}
+                <TableCell className="whitespace-nowrap text-right font-semibold text-foreground/80 transition-colors group-hover:text-foreground">
+                  {row.devCycleTime !== null ? `${fmtNum(row.devCycleTime)} дн.` : <span className="font-normal text-muted-foreground/40">—</span>}
                 </TableCell>
-                <TableCell className="whitespace-nowrap text-right font-semibold text-slate-700 transition-colors group-hover:text-foreground">
-                  {row.upstreamTime !== null ? `${fmtNum(row.upstreamTime)} дн.` : <span className="font-normal text-slate-300">—</span>}
+                <TableCell className="whitespace-nowrap text-right font-semibold text-foreground/80 transition-colors group-hover:text-foreground">
+                  {row.upstreamTime !== null ? `${fmtNum(row.upstreamTime)} дн.` : <span className="font-normal text-muted-foreground/40">—</span>}
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
                   <StatusBadge status={row.currentStatus} />
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground transition-colors group-hover:text-foreground">
-                  {row.completedAt ? row.completedAt.toLocaleDateString('ru-RU') : <span className="text-slate-300">—</span>}
+                  {row.completedAt ? row.completedAt.toLocaleDateString('ru-RU') : <span className="text-muted-foreground/40">—</span>}
                 </TableCell>
               </TableRow>
             ))}

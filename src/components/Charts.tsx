@@ -46,6 +46,12 @@ export function ScatterChart({ id, rows, field, color, values }: ScatterProps) {
     const p50 = percentile(values, 50);
     const p85 = percentile(values, 85);
     const p95 = percentile(values, 95);
+    const pointFill = color.length === 7 ? `${color}99` : color;
+    const faintHorizontalGrid = {
+      color: 'rgba(100, 116, 139, 0.16)',
+      borderDash: [4, 4],
+      drawTicks: false,
+    } as unknown as { color: string; drawTicks: boolean };
 
     const makeLine = (y: number | null, label: string, lineColor: string, dash: number[] = []) =>
       y !== null
@@ -54,7 +60,7 @@ export function ScatterChart({ id, rows, field, color, values }: ScatterProps) {
             label,
             data: [{ x: xMin - pad, y }, { x: xMax + pad, y }],
             borderColor: lineColor,
-            borderWidth: 1.5,
+            borderWidth: 1,
             borderDash: dash,
             pointRadius: 0,
             fill: false,
@@ -69,15 +75,17 @@ export function ScatterChart({ id, rows, field, color, values }: ScatterProps) {
           {
             label: metricLabel,
             data: points,
-            backgroundColor: color + 'aa',
+            backgroundColor: pointFill,
             borderColor: color,
             borderWidth: 1,
             pointRadius: 5,
             pointHoverRadius: 7,
+            pointBackgroundColor: pointFill,
+            pointBorderColor: color,
           },
-          makeLine(p50, `P50: ${fmtNum(p50)} дн.`, '#6b7280', [3, 3]),
-          makeLine(p85, `P85: ${fmtNum(p85)} дн.`, '#f59e0b', [4, 4]),
-          makeLine(p95, `P95: ${fmtNum(p95)} дн.`, '#ef4444', [4, 4]),
+          makeLine(p50, `P50: ${fmtNum(p50)} дн.`, '#64748b', [6, 4]),
+          makeLine(p85, `P85: ${fmtNum(p85)} дн.`, '#b45309', [6, 4]),
+          makeLine(p95, `P95: ${fmtNum(p95)} дн.`, '#be6a76', [6, 4]),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ].filter(Boolean) as any[],
       },
@@ -85,7 +93,16 @@ export function ScatterChart({ id, rows, field, color, values }: ScatterProps) {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+          legend: {
+            position: 'top',
+            labels: {
+              boxWidth: 10,
+              boxHeight: 10,
+              color: '#64748b',
+              font: { size: 11 },
+              usePointStyle: true,
+            },
+          },
           tooltip: {
             filter: (item) => item.datasetIndex === 0,
             callbacks: {
@@ -102,13 +119,22 @@ export function ScatterChart({ id, rows, field, color, values }: ScatterProps) {
           x: {
             type: 'linear',
             ticks: {
+              color: '#64748b',
+              font: { size: 11 },
               maxTicksLimit: 8,
               callback: (v) =>
                 new Date(Number(v)).toLocaleDateString('ru-RU', { month: 'short', day: 'numeric' }),
             },
-            grid: { color: '#f3f4f6' },
+            border: { display: false },
+            grid: { display: false },
           },
-          y: { title: { display: true, text: 'Дни', font: { size: 11 } }, min: 0, grid: { color: '#f3f4f6' } },
+          y: {
+            title: { display: true, text: 'Дни', color: '#64748b', font: { size: 11 } },
+            min: 0,
+            ticks: { color: '#64748b', font: { size: 11 } },
+            border: { display: false },
+            grid: faintHorizontalGrid,
+          },
         },
       },
     });
@@ -139,6 +165,12 @@ export function ThroughputChart({ weeks }: { weeks: ThroughputWeek[] }) {
       return breakdown && Object.keys(breakdown).length > 0;
     });
     const labels = weeks.map((w) => fmtWeekLabel(w.date));
+    const faintHorizontalGrid = {
+      color: 'rgba(100, 116, 139, 0.16)',
+      borderDash: [4, 4],
+      drawTicks: false,
+    } as unknown as { color: string; drawTicks: boolean };
+    const withAlpha = (value: string, alpha = '80') => value.length === 7 ? `${value}${alpha}` : value;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let datasets: any[];
@@ -147,7 +179,7 @@ export function ThroughputChart({ weeks }: { weeks: ThroughputWeek[] }) {
       datasets = allGroups.map((groupName) => ({
         label: groupName,
         data: weeks.map((w) => selectedBreakdown(w)?.[groupName] ?? 0),
-        backgroundColor: getTypeColor(groupName) + 'cc',
+        backgroundColor: withAlpha(getTypeColor(groupName)),
         borderColor: getTypeColor(groupName),
         borderWidth: 1,
         borderRadius: 4,
@@ -157,9 +189,9 @@ export function ThroughputChart({ weeks }: { weeks: ThroughputWeek[] }) {
       datasets = [{
         label: 'Завершено за неделю',
         data: weeks.map((w) => w.count),
-        backgroundColor: '#10b981aa',
-        borderColor: '#10b981',
-        borderWidth: 1.5,
+        backgroundColor: '#94a3b880',
+        borderColor: '#64748b',
+        borderWidth: 1,
         borderRadius: 4,
       }];
     }
@@ -170,11 +202,26 @@ export function ThroughputChart({ weeks }: { weeks: ThroughputWeek[] }) {
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
-          legend: { display: hasBreakdown, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+          legend: {
+            display: hasBreakdown,
+            position: 'top',
+            labels: { boxWidth: 10, boxHeight: 10, color: '#64748b', font: { size: 11 }, usePointStyle: true },
+          },
         },
         scales: {
-          x: { stacked: hasBreakdown, grid: { display: false }, ticks: { font: { size: 11 } } },
-          y: { stacked: hasBreakdown, min: 0, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: '#f3f4f6' } },
+          x: {
+            stacked: hasBreakdown,
+            border: { display: false },
+            grid: { display: false },
+            ticks: { color: '#64748b', font: { size: 11 } },
+          },
+          y: {
+            stacked: hasBreakdown,
+            min: 0,
+            border: { display: false },
+            ticks: { stepSize: 1, color: '#64748b', font: { size: 11 } },
+            grid: faintHorizontalGrid,
+          },
         },
       },
     });

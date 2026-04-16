@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
-import { Info } from 'lucide-react';
+import type { ColumnDef, Row } from '@tanstack/react-table';
+import { ChevronDown, ClipboardList, Info, Layers2 } from 'lucide-react';
 import { InlineNumberInput } from './InlineNumberInput';
 import { saveRiceScores, type RiceUpdate } from '../lib/riceApi';
-import type { RiceIssue } from '../types';
+import type { PrioritizationIssue, PrioritizationTableRow, PrioritizationTaskRow } from '../lib/prioritization';
+import { buildPrioritizationHierarchy, buildScoreInheritanceUpdates, preparePrioritizationData } from '../lib/prioritization';
+import { JIRA_BASE_URL, type RiceIssue } from '../types';
 import {
   StatusCell,
   SummaryCell,
@@ -203,11 +205,76 @@ function GhostNumberInput({ value, onChange, disabled, min = EFFORT_MIN, max = E
 
 function RankCell({ value, isDirty }: { value: number | null; isDirty: boolean }) {
   return (
-    <div className="relative text-center text-xs font-bold text-gray-400 group-hover:text-slate-900">
+    <div className="relative text-center text-xs font-normal text-muted-foreground/40 group-hover:text-muted-foreground/60">
       {isDirty && (
         <div className="absolute left-1 top-1/2 size-2 -translate-y-1/2 rounded-full bg-orange-400 shadow-sm" title="Несохраненные изменения" />
       )}
       {value ?? '—'}
+    </div>
+  );
+}
+
+function isTaskRow(row: PrioritizationTableRow): row is PrioritizationTaskRow {
+  return row.kind === 'task';
+}
+
+function GroupSummaryCell({ row }: { row: Row<PrioritizationTableRow> }) {
+  const item = row.original;
+  if (item.kind !== 'group') return null;
+
+  const issueCount = item.subRows.length;
+  const icon = item.isOrphan
+    ? <ClipboardList size={15} strokeWidth={2.1} aria-hidden="true" />
+    : <Layers2 size={15} strokeWidth={2.1} aria-hidden="true" />;
+
+  return (
+    <div className="-ml-6 flex min-w-[28rem] max-w-[44rem] items-center gap-2 py-1">
+      <button
+        type="button"
+        className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        onClick={row.getToggleExpandedHandler()}
+        aria-label={row.getIsExpanded() ? 'Свернуть' : 'Развернуть'}
+        aria-expanded={row.getIsExpanded()}
+      >
+        <ChevronDown
+          size={15}
+          className={row.getIsExpanded() ? 'transition-transform' : '-rotate-90 transition-transform'}
+          aria-hidden="true"
+        />
+      </button>
+      <span className={item.isOrphan ? 'inline-flex size-[18px] shrink-0 items-center justify-center text-muted-foreground' : 'inline-flex size-[18px] shrink-0 items-center justify-center text-violet-600'}>
+        {icon}
+      </span>
+      {item.epicKey ? (
+        <a
+          href={`${JIRA_BASE_URL}/${item.epicKey}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 text-[13px] font-semibold leading-tight text-muted-foreground underline-offset-[3px] transition-colors duration-150 hover:text-foreground hover:underline"
+        >
+          {item.epicKey}
+        </a>
+      ) : (
+        <span className="shrink-0 text-[13px] font-semibold leading-tight text-muted-foreground">{item.title}</span>
+      )}
+      {item.epicKey ? (
+        <span className="min-w-0 truncate text-sm font-semibold leading-5 text-zinc-800 transition-colors group-hover:text-zinc-950">
+          {item.title}
+        </span>
+      ) : null}
+      <span className="shrink-0 text-xs font-medium text-muted-foreground/70">
+        {issueCount} {issueCount === 1 ? 'тикет' : issueCount < 5 ? 'тикета' : 'тикетов'}
+      </span>
+    </div>
+  );
+}
+
+function TaskSummaryCell({ issue }: { issue: PrioritizationIssue }) {
+  return (
+    <div className="pl-10">
+      <SummaryCell issueKey={issue.key} issueType={issue.issue_type}>
+        {issue.summary}
+      </SummaryCell>
     </div>
   );
 }
@@ -298,42 +365,51 @@ export function RiceSection({
     if (!allowedTabs.includes(scoringTab)) setScoringTab(allowedTabs[0]);
   }, [allowedTabs, scoringTab]);
 
+  // ── Prepared data ────────────────────────────────────────────────────────
+  const prioritizationData = useMemo(() => preparePrioritizationData(issues), [issues]);
+  const { featuresData, bugsData, techDebtData, allById } = prioritizationData;
+
   // ── Save ──────────────────────────────────────────────────────────────────
   const save = async () => {
     setSaving(true); setMsg(null);
     try {
-      const updates = issues.flatMap((issue): RiceUpdate[] => {
+      const updates = Array.from(allById.values()).flatMap((issue): RiceUpdate[] => {
         if (!dirtyKeys.has(issue.key)) return [];
 
-        if (issue.issue_type === 'Ошибка') {
+        if (issue.type === 'Bug') {
           const row = bugScores.get(issue.key);
           if (!row) return [];
           const bug_score = calcBugScore(row);
           if (bug_score === null) return [];
-          return [{ key: issue.key, reach: null, impact: null, confidence: null, effort: null, rice_score: null,
+          const parentUpdate = { key: issue.key, priority: issue.priority, reach: null, impact: null, confidence: null, effort: null, rice_score: null,
             bug_risk: parseFloat(row.bug_risk), bug_process: parseFloat(row.bug_process),
             bug_scale: parseFloat(row.bug_scale), bug_workaround: parseFloat(row.bug_workaround),
-            bug_score, td_impact: null, td_effort: null, td_roi: null }];
+            bug_score, td_impact: null, td_effort: null, td_roi: null };
+          return buildScoreInheritanceUpdates(parentUpdate, allById.values());
         }
 
-        if (issue.issue_type === 'Техдолг') {
+        if (issue.type === 'TechDebt') {
           const row = tdScores.get(issue.key);
           if (!row) return [];
           const td_roi = calcTdRoi(row);
           if (td_roi === null) return [];
-          return [{ key: issue.key, reach: null, impact: null, confidence: null, effort: null, rice_score: null,
+          const parentUpdate = { key: issue.key, priority: issue.priority, reach: null, impact: null, confidence: null, effort: null, rice_score: null,
             bug_risk: null, bug_process: null, bug_scale: null, bug_workaround: null, bug_score: null,
-            td_impact: parseFloat(row.td_impact), td_effort: parseFloat(row.td_effort), td_roi }];
+            td_impact: parseFloat(row.td_impact), td_effort: parseFloat(row.td_effort), td_roi };
+          return buildScoreInheritanceUpdates(parentUpdate, allById.values());
         }
+
+        if (issue.type !== 'Story' && issue.type !== 'Task') return [];
 
         // User Story / Задача → RICE
         const row = scores.get(issue.key);
         if (!row) return [];
         const rice_score = calcScore(row);
         if (rice_score === null) return [];
-        return [{ key: issue.key, reach: parseFloat(row.reach), impact: parseFloat(row.impact), confidence: parseFloat(row.confidence), effort: parseFloat(row.effort), rice_score,
+        const parentUpdate = { key: issue.key, priority: issue.priority, reach: parseFloat(row.reach), impact: parseFloat(row.impact), confidence: parseFloat(row.confidence), effort: parseFloat(row.effort), rice_score,
           bug_risk: null, bug_process: null, bug_scale: null, bug_workaround: null, bug_score: null,
-          td_impact: null, td_effort: null, td_roi: null }];
+          td_impact: null, td_effort: null, td_roi: null };
+        return buildScoreInheritanceUpdates(parentUpdate, allById.values());
       });
 
       if (!updates.length) { setMsg({ text: 'Нет задач с корректно заполненными оценками для сохранения', ok: false }); return; }
@@ -375,13 +451,8 @@ export function RiceSection({
     setScores(prev => { const m = new Map(prev); m.set(key, { reach: '9999', impact: '1', confidence: '100', effort: '1' }); return m; });
   };
 
-  // ── Filtered lists ────────────────────────────────────────────────────────
-  const riceIssues = useMemo(() => issues.filter(i => i.issue_type !== 'Ошибка' && i.issue_type !== 'Техдолг'), [issues]);
-  const bugIssues  = useMemo(() => issues.filter(i => i.issue_type === 'Ошибка'), [issues]);
-  const tdIssues   = useMemo(() => issues.filter(i => i.issue_type === 'Техдолг'), [issues]);
-
   // ── Sorted lists ──────────────────────────────────────────────────────────
-  const sortedRice = useMemo(() => [...riceIssues].sort((a, b) => {
+  const sortedRice = useMemo(() => [...featuresData].sort((a, b) => {
     if (sortField === 'rice') {
       const sa = calcScore(scores.get(a.key) ?? initRow(a)) ?? -1;
       const sb = calcScore(scores.get(b.key) ?? initRow(b)) ?? -1;
@@ -389,9 +460,9 @@ export function RiceSection({
     }
     return sortDir === 'asc' ? a.key.localeCompare(b.key) : b.key.localeCompare(a.key);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [riceIssues, sortTrigger, sortField, sortDir]);
+  }), [featuresData, sortTrigger, sortField, sortDir]);
 
-  const sortedBugs = useMemo(() => [...bugIssues].sort((a, b) => {
+  const sortedBugs = useMemo(() => [...bugsData].sort((a, b) => {
     if (bugSortField === 'score') {
       const sa = calcBugScore(bugScores.get(a.key) ?? initBugRow(a)) ?? -1;
       const sb = calcBugScore(bugScores.get(b.key) ?? initBugRow(b)) ?? -1;
@@ -399,9 +470,9 @@ export function RiceSection({
     }
     return bugSortDir === 'asc' ? a.key.localeCompare(b.key) : b.key.localeCompare(a.key);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [bugIssues, bugSortField, bugSortDir]);
+  }), [bugsData, bugSortField, bugSortDir]);
 
-  const sortedTd = useMemo(() => [...tdIssues].sort((a, b) => {
+  const sortedTd = useMemo(() => [...techDebtData].sort((a, b) => {
     const rowA = tdScores.get(a.key) ?? initTdRow(a);
     const rowB = tdScores.get(b.key) ?? initTdRow(b);
     const qA = tdQuadrant(rowA.td_impact, rowA.td_effort)?.order ?? 99;
@@ -411,7 +482,15 @@ export function RiceSection({
     const roiB = calcTdRoi(rowB) ?? -1;
     return tdSortDir === 'desc' ? roiB - roiA : roiA - roiB;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [tdIssues, tdSortDir, sortTrigger]);
+  }), [techDebtData, tdSortDir, sortTrigger]);
+
+  const riceRankByKey = useMemo(() => new Map(sortedRice.map((issue, index) => [issue.key, index + 1])), [sortedRice]);
+  const bugRankByKey = useMemo(() => new Map(sortedBugs.map((issue, index) => [issue.key, index + 1])), [sortedBugs]);
+  const tdRankByKey = useMemo(() => new Map(sortedTd.map((issue, index) => [issue.key, index + 1])), [sortedTd]);
+
+  const riceRows = useMemo(() => buildPrioritizationHierarchy(sortedRice), [sortedRice]);
+  const bugRows = useMemo(() => buildPrioritizationHierarchy(sortedBugs), [sortedBugs]);
+  const tdRows = useMemo(() => buildPrioritizationHierarchy(sortedTd), [sortedTd]);
 
   // ── Derived stats ─────────────────────────────────────────────────────────
   const riceScoreValues = sortedRice
@@ -419,8 +498,8 @@ export function RiceSection({
     .filter((s): s is number => s !== null);
   const maxRiceScore    = riceScoreValues.length ? Math.max(...riceScoreValues) : 0;
   const scoredRice      = riceScoreValues.length;
-  const scoredBugs      = bugIssues.filter(i => calcBugScore(bugScores.get(i.key) ?? initBugRow(i)) !== null).length;
-  const scoredTd        = tdIssues.filter(i => calcTdRoi(tdScores.get(i.key) ?? initTdRow(i)) !== null).length;
+  const scoredBugs      = bugsData.filter(i => calcBugScore(bugScores.get(i.key) ?? initBugRow(i)) !== null).length;
+  const scoredTd        = techDebtData.filter(i => calcTdRoi(tdScores.get(i.key) ?? initTdRow(i)) !== null).length;
 
   // ── Send to MC queue ──────────────────────────────────────────────────────
   const sendToQueue = async () => {
@@ -430,41 +509,41 @@ export function RiceSection({
     onSwitchToMetrics();
   };
 
-  const riceColumns = useMemo<ColumnDef<RiceIssue>[]>(() => [
+  const riceColumns = useMemo<ColumnDef<PrioritizationTableRow>[]>(() => [
     {
       id: 'rank',
       header: '#',
       cell: ({ row }) => {
-        const score = calcScore(scores.get(row.original.key) ?? initRow(row.original));
-        return <RankCell value={score !== null ? row.index + 1 : null} isDirty={dirtyKeys.has(row.original.key)} />;
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const score = calcScore(scores.get(issue.key) ?? initRow(issue));
+        return <RankCell value={score !== null ? riceRankByKey.get(issue.key) ?? null : null} isDirty={dirtyKeys.has(issue.key)} />;
       },
     },
     {
       id: 'summary',
       header: () => <HeaderLabel title="Summary" hint="контекст задачи" />,
-      cell: ({ row }) => (
-        <SummaryCell issueKey={row.original.key} issueType={row.original.issue_type}>
-          {row.original.summary}
-        </SummaryCell>
-      ),
+      cell: ({ row }) => isTaskRow(row.original) ? <TaskSummaryCell issue={row.original} /> : <GroupSummaryCell row={row} />,
     },
     {
       id: 'status',
-      header: 'Статус',
-      cell: ({ row }) => <StatusCell status={row.original.status} />,
+      header: () => <HeaderLabel title="Статус" />,
+      cell: ({ row }) => isTaskRow(row.original) ? <StatusCell status={row.original.status} /> : null,
     },
     {
       id: 'reach',
       header: () => <HeaderLabel title="Reach" hint="польз./мес." />,
       cell: ({ row }) => {
-        const scoreRow = scores.get(row.original.key) ?? initRow(row.original);
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const scoreRow = scores.get(issue.key) ?? initRow(issue);
         return (
           <InlineNumberInput
             className={`h-8 w-20 no-spinner px-2 text-right text-sm font-medium tabular-nums ${saving ? 'text-muted-foreground' : ''}`}
             value={scoreRow.reach}
             disabled={saving}
             variant="ghost"
-            onChange={(v) => setField(row.original.key, 'reach', v)}
+            onChange={(v) => setField(issue.key, 'reach', v)}
           />
         );
       },
@@ -473,12 +552,14 @@ export function RiceSection({
       id: 'impact',
       header: () => <HeaderLabel title="Impact" hint="множитель" />,
       cell: ({ row }) => {
-        const scoreRow = scores.get(row.original.key) ?? initRow(row.original);
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const scoreRow = scores.get(issue.key) ?? initRow(issue);
         return (
           <TableSelect
             options={IMPACT_OPTIONS}
             value={scoreRow.impact}
-            onChange={(v) => setField(row.original.key, 'impact', v)}
+            onChange={(v) => setField(issue.key, 'impact', v)}
             disabled={saving}
             className="w-32"
             getLabel={(v) => `${IMPACT_LABELS[String(v)]} (${v})`}
@@ -490,12 +571,14 @@ export function RiceSection({
       id: 'confidence',
       header: () => <HeaderLabel title="Confidence" hint="уверенность" />,
       cell: ({ row }) => {
-        const scoreRow = scores.get(row.original.key) ?? initRow(row.original);
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const scoreRow = scores.get(issue.key) ?? initRow(issue);
         return (
           <TableSelect
             options={CONF_OPTIONS}
             value={scoreRow.confidence}
-            onChange={(v) => setField(row.original.key, 'confidence', v)}
+            onChange={(v) => setField(issue.key, 'confidence', v)}
             disabled={saving}
             className="w-24"
             getLabel={(v) => `${v}%`}
@@ -507,8 +590,10 @@ export function RiceSection({
       id: 'effort',
       header: () => <HeaderLabel title="Effort" hint="сторипоинты" />,
       cell: ({ row }) => {
-        const scoreRow = scores.get(row.original.key) ?? initRow(row.original);
-        return <GhostNumberInput value={scoreRow.effort} onChange={(v) => setField(row.original.key, 'effort', v)} disabled={saving} />;
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const scoreRow = scores.get(issue.key) ?? initRow(issue);
+        return <GhostNumberInput value={scoreRow.effort} onChange={(v) => setField(issue.key, 'effort', v)} disabled={saving} />;
       },
     },
     {
@@ -524,7 +609,9 @@ export function RiceSection({
         </TasksDataTableSortHeader>
       ),
       cell: ({ row }) => {
-        const score = calcScore(scores.get(row.original.key) ?? initRow(row.original));
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const score = calcScore(scores.get(issue.key) ?? initRow(issue));
         return (
           <div className="relative text-center group/rice">
             {score !== null
@@ -538,7 +625,7 @@ export function RiceSection({
               : <span className="text-gray-300 text-base">—</span>}
             <Button
               title="Установить срочно (RICE 9999)"
-              onClick={() => setUrgent9999(row.original.key)}
+              onClick={() => setUrgent9999(issue.key)}
               disabled={saving}
               variant="secondary"
               size="icon"
@@ -549,61 +636,67 @@ export function RiceSection({
       },
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [scores, dirtyKeys, saving, sortField, sortDir, maxRiceScore]);
+  ], [scores, dirtyKeys, saving, sortField, sortDir, maxRiceScore, riceRankByKey]);
 
-  const bugColumns = useMemo<ColumnDef<RiceIssue>[]>(() => [
+  const bugColumns = useMemo<ColumnDef<PrioritizationTableRow>[]>(() => [
     {
       id: 'rank',
       header: '#',
       cell: ({ row }) => {
-        const score = calcBugScore(bugScores.get(row.original.key) ?? initBugRow(row.original));
-        return <RankCell value={score !== null ? row.index + 1 : null} isDirty={dirtyKeys.has(row.original.key)} />;
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const score = calcBugScore(bugScores.get(issue.key) ?? initBugRow(issue));
+        return <RankCell value={score !== null ? bugRankByKey.get(issue.key) ?? null : null} isDirty={dirtyKeys.has(issue.key)} />;
       },
     },
     {
       id: 'summary',
       header: () => <HeaderLabel title="Summary" hint="контекст дефекта" />,
-      cell: ({ row }) => (
-        <SummaryCell issueKey={row.original.key} issueType={row.original.issue_type}>
-          {row.original.summary}
-        </SummaryCell>
-      ),
+      cell: ({ row }) => isTaskRow(row.original) ? <TaskSummaryCell issue={row.original} /> : <GroupSummaryCell row={row} />,
     },
     {
       id: 'status',
-      header: 'Статус',
-      cell: ({ row }) => <StatusCell status={row.original.status} />,
+      header: () => <HeaderLabel title="Статус" />,
+      cell: ({ row }) => isTaskRow(row.original) ? <StatusCell status={row.original.status} /> : null,
     },
     {
       id: 'risk',
       header: () => <HeaderLabel title="R — Риски" hint="фин./юрид./репутационные" />,
       cell: ({ row }) => {
-        const bugRow = bugScores.get(row.original.key) ?? initBugRow(row.original);
-        return <TableSelect options={[...BUG_RISK_OPTIONS]} value={bugRow.bug_risk} onChange={(v) => setBugField(row.original.key, 'bug_risk', v)} disabled={saving} getLabel={(v) => BUG_RISK_LABELS[v]} />;
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const bugRow = bugScores.get(issue.key) ?? initBugRow(issue);
+        return <TableSelect options={[...BUG_RISK_OPTIONS]} value={bugRow.bug_risk} onChange={(v) => setBugField(issue.key, 'bug_risk', v)} disabled={saving} getLabel={(v) => BUG_RISK_LABELS[v]} />;
       },
     },
     {
       id: 'process',
       header: () => <HeaderLabel title="P — Процесс" hint="кредитный конвейер" />,
       cell: ({ row }) => {
-        const bugRow = bugScores.get(row.original.key) ?? initBugRow(row.original);
-        return <TableSelect options={[...BUG_PROCESS_OPTIONS]} value={bugRow.bug_process} onChange={(v) => setBugField(row.original.key, 'bug_process', v)} disabled={saving} getLabel={(v) => BUG_PROCESS_LABELS[v]} />;
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const bugRow = bugScores.get(issue.key) ?? initBugRow(issue);
+        return <TableSelect options={[...BUG_PROCESS_OPTIONS]} value={bugRow.bug_process} onChange={(v) => setBugField(issue.key, 'bug_process', v)} disabled={saving} getLabel={(v) => BUG_PROCESS_LABELS[v]} />;
       },
     },
     {
       id: 'scale',
       header: () => <HeaderLabel title="S — Масштаб" hint="охват проблемы" />,
       cell: ({ row }) => {
-        const bugRow = bugScores.get(row.original.key) ?? initBugRow(row.original);
-        return <TableSelect options={[...BUG_SCALE_OPTIONS]} value={bugRow.bug_scale} onChange={(v) => setBugField(row.original.key, 'bug_scale', v)} disabled={saving} getLabel={(v) => BUG_SCALE_LABELS[v]} />;
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const bugRow = bugScores.get(issue.key) ?? initBugRow(issue);
+        return <TableSelect options={[...BUG_SCALE_OPTIONS]} value={bugRow.bug_scale} onChange={(v) => setBugField(issue.key, 'bug_scale', v)} disabled={saving} getLabel={(v) => BUG_SCALE_LABELS[v]} />;
       },
     },
     {
       id: 'workaround',
       header: () => <HeaderLabel title="W — Workaround" hint="обходной путь" />,
       cell: ({ row }) => {
-        const bugRow = bugScores.get(row.original.key) ?? initBugRow(row.original);
-        return <TableSelect options={[...BUG_WA_OPTIONS]} value={bugRow.bug_workaround} onChange={(v) => setBugField(row.original.key, 'bug_workaround', v)} disabled={saving} getLabel={(v) => BUG_WA_LABELS[v]} />;
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const bugRow = bugScores.get(issue.key) ?? initBugRow(issue);
+        return <TableSelect options={[...BUG_WA_OPTIONS]} value={bugRow.bug_workaround} onChange={(v) => setBugField(issue.key, 'bug_workaround', v)} disabled={saving} getLabel={(v) => BUG_WA_LABELS[v]} />;
       },
     },
     {
@@ -620,7 +713,9 @@ export function RiceSection({
         </TasksDataTableSortHeader>
       ),
       cell: ({ row }) => {
-        const score = calcBugScore(bugScores.get(row.original.key) ?? initBugRow(row.original));
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const score = calcBugScore(bugScores.get(issue.key) ?? initBugRow(issue));
         const tone = bugScoreTone(score);
         return (
           <div className="text-center">
@@ -641,45 +736,47 @@ export function RiceSection({
       },
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [bugScores, dirtyKeys, saving, bugSortField, bugSortDir]);
+  ], [bugScores, dirtyKeys, saving, bugSortField, bugSortDir, bugRankByKey]);
 
-  const tdColumns = useMemo<ColumnDef<RiceIssue>[]>(() => [
+  const tdColumns = useMemo<ColumnDef<PrioritizationTableRow>[]>(() => [
     {
       id: 'rank',
       header: '#',
       cell: ({ row }) => {
-        const roi = calcTdRoi(tdScores.get(row.original.key) ?? initTdRow(row.original));
-        return <RankCell value={roi !== null ? row.index + 1 : null} isDirty={dirtyKeys.has(row.original.key)} />;
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const roi = calcTdRoi(tdScores.get(issue.key) ?? initTdRow(issue));
+        return <RankCell value={roi !== null ? tdRankByKey.get(issue.key) ?? null : null} isDirty={dirtyKeys.has(issue.key)} />;
       },
     },
     {
       id: 'summary',
       header: () => <HeaderLabel title="Summary" hint="контекст долга" />,
-      cell: ({ row }) => (
-        <SummaryCell issueKey={row.original.key} issueType={row.original.issue_type}>
-          {row.original.summary}
-        </SummaryCell>
-      ),
+      cell: ({ row }) => isTaskRow(row.original) ? <TaskSummaryCell issue={row.original} /> : <GroupSummaryCell row={row} />,
     },
     {
       id: 'status',
-      header: 'Статус',
-      cell: ({ row }) => <StatusCell status={row.original.status} />,
+      header: () => <HeaderLabel title="Статус" />,
+      cell: ({ row }) => isTaskRow(row.original) ? <StatusCell status={row.original.status} /> : null,
     },
     {
       id: 'impact',
       header: () => <HeaderLabel title="Impact" hint="ценность решения (1–10)" />,
       cell: ({ row }) => {
-        const tdRow = tdScores.get(row.original.key) ?? initTdRow(row.original);
-        return <GhostNumberInput value={tdRow.td_impact} onChange={(v) => setTdField(row.original.key, 'td_impact', v)} disabled={saving} min={1} max={10} step={1} />;
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const tdRow = tdScores.get(issue.key) ?? initTdRow(issue);
+        return <GhostNumberInput value={tdRow.td_impact} onChange={(v) => setTdField(issue.key, 'td_impact', v)} disabled={saving} min={1} max={10} step={1} />;
       },
     },
     {
       id: 'effort',
       header: () => <HeaderLabel title="Effort" hint="трудозатраты (1–10)" />,
       cell: ({ row }) => {
-        const tdRow = tdScores.get(row.original.key) ?? initTdRow(row.original);
-        return <GhostNumberInput value={tdRow.td_effort} onChange={(v) => setTdField(row.original.key, 'td_effort', v)} disabled={saving} min={1} max={10} step={1} />;
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const tdRow = tdScores.get(issue.key) ?? initTdRow(issue);
+        return <GhostNumberInput value={tdRow.td_effort} onChange={(v) => setTdField(issue.key, 'td_effort', v)} disabled={saving} min={1} max={10} step={1} />;
       },
     },
     {
@@ -696,7 +793,9 @@ export function RiceSection({
         </TasksDataTableSortHeader>
       ),
       cell: ({ row }) => {
-        const tdRow = tdScores.get(row.original.key) ?? initTdRow(row.original);
+        if (!isTaskRow(row.original)) return null;
+        const issue = row.original;
+        const tdRow = tdScores.get(issue.key) ?? initTdRow(issue);
         const roi = calcTdRoi(tdRow);
         const q = tdQuadrant(tdRow.td_impact, tdRow.td_effort);
         return (
@@ -718,20 +817,20 @@ export function RiceSection({
       },
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [tdScores, dirtyKeys, saving, tdSortDir]);
+  ], [tdScores, dirtyKeys, saving, tdSortDir, tdRankByKey]);
 
   const ALL_SUB_TABS: { id: ScoringTab; label: string; scored: number; total: number }[] = [
-    { id: 'rice',     label: 'Задачи',      scored: scoredRice,  total: riceIssues.length },
-    { id: 'bugs',     label: 'Баги',        scored: scoredBugs,  total: bugIssues.length  },
-    { id: 'techdebt', label: 'Техдолг',     scored: scoredTd,    total: tdIssues.length   },
+    { id: 'rice',     label: 'Задачи',      scored: scoredRice,  total: featuresData.length },
+    { id: 'bugs',     label: 'Баги',        scored: scoredBugs,  total: bugsData.length  },
+    { id: 'techdebt', label: 'Техдолг',     scored: scoredTd,    total: techDebtData.length   },
   ];
   const SUB_TABS = ALL_SUB_TABS.filter((tab) => !allowedTabs || allowedTabs.includes(tab.id));
 
   // ── Current tab issues count for toolbar label ────────────────────────────
   const currentTabLabel = {
-    rice:     `${riceIssues.length} задач · ${scoredRice} оценено`,
-    bugs:     `${bugIssues.length} багов · ${scoredBugs} оценено`,
-    techdebt: `${tdIssues.length} задач · ${scoredTd} оценено`,
+    rice:     `${featuresData.length} задач · ${scoredRice} оценено`,
+    bugs:     `${bugsData.length} багов · ${scoredBugs} оценено`,
+    techdebt: `${techDebtData.length} задач · ${scoredTd} оценено`,
   }[scoringTab];
 
   const currentTabTitle = {
@@ -741,7 +840,7 @@ export function RiceSection({
   }[scoringTab];
 
   // ── Current tab has items ─────────────────────────────────────────────────
-  const currentTabItems = { rice: riceIssues, bugs: bugIssues, techdebt: tdIssues }[scoringTab];
+  const currentTabItems = { rice: featuresData, bugs: bugsData, techdebt: techDebtData }[scoringTab];
 
   // ═══════════════════════════════════════════════════════════════════════════
   const content = (
@@ -984,9 +1083,11 @@ export function RiceSection({
 
       {scoringTab === "rice" && sortedRice.length > 0 && (
         <TasksDataTable
-          data={sortedRice}
+          data={riceRows}
           columns={riceColumns}
-          getRowId={(issue) => issue.key}
+          getRowId={(row) => row.id}
+          getSubRows={(row) => row.kind === 'group' ? row.subRows : undefined}
+          defaultExpanded
           footerText={String(sortedRice.length) + " " + (sortedRice.length === 1 ? "задача" : sortedRice.length < 5 ? "задачи" : "задач") + " в RICE"}
           emptyTitle="Нет задач для RICE-оценки"
         />
@@ -994,9 +1095,11 @@ export function RiceSection({
 
       {scoringTab === "bugs" && sortedBugs.length > 0 && (
         <TasksDataTable
-          data={sortedBugs}
+          data={bugRows}
           columns={bugColumns}
-          getRowId={(issue) => issue.key}
+          getRowId={(row) => row.id}
+          getSubRows={(row) => row.kind === 'group' ? row.subRows : undefined}
+          defaultExpanded
           footerText={String(sortedBugs.length) + " " + (sortedBugs.length === 1 ? "баг" : sortedBugs.length < 5 ? "бага" : "багов") + " в оценке"}
           emptyTitle="Нет багов для оценки"
         />
@@ -1004,9 +1107,11 @@ export function RiceSection({
 
       {scoringTab === "techdebt" && sortedTd.length > 0 && (
         <TasksDataTable
-          data={sortedTd}
+          data={tdRows}
           columns={tdColumns}
-          getRowId={(issue) => issue.key}
+          getRowId={(row) => row.id}
+          getSubRows={(row) => row.kind === 'group' ? row.subRows : undefined}
+          defaultExpanded
           footerText={String(sortedTd.length) + " " + (sortedTd.length === 1 ? "задача" : sortedTd.length < 5 ? "задачи" : "задач") + " техдолга"}
           emptyTitle="Нет техдолга для оценки"
         />

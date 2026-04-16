@@ -41,6 +41,7 @@ export async function refreshRiceIssues(n8nBaseUrl: string): Promise<RiceIssuesR
 
 export interface RiceUpdate {
   key: string;
+  priority?: string;
   // RICE fields (User Story / Задача) — null для других типов
   reach: number | null;
   impact: number | null;

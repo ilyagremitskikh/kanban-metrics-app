@@ -153,6 +153,11 @@ describe('snapshots helpers', () => {
       parent_key: 'CRED-11',
       epic_key: 'CRED-EPIC-2',
     });
+    expect(next.riceIssues[0]).toMatchObject({
+      key: 'CRED-124',
+      parent_key: 'CRED-11',
+      epic_key: 'CRED-EPIC-2',
+    });
     expect(next.meta.lastSyncAt).toBe('2026-04-15T00:00:00.000Z');
   });
 

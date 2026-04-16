@@ -28,6 +28,8 @@ type RawThroughputIssue = Partial<ThroughputIssueRaw> & {
 type RawRiceIssue = Partial<RiceIssue> & {
   issuetype?: string;
   issueType?: string;
+  parentKey?: string | null;
+  epicKey?: string | null;
   labels?: string | string[];
 };
 
@@ -108,6 +110,9 @@ export function normalizeThroughputIssue(raw: RawThroughputIssue): ThroughputIss
 }
 
 export function normalizeRiceIssue(raw: RawRiceIssue): RiceIssue {
+  const parentKey = raw.parent_key ?? raw.parentKey ?? raw.parent?.key;
+  const epicKey = raw.epic_key ?? raw.epicKey ?? raw.epic?.key;
+
   return {
     key: raw.key ?? '',
     summary: raw.summary ?? '',
@@ -115,6 +120,10 @@ export function normalizeRiceIssue(raw: RawRiceIssue): RiceIssue {
     labels: toText(raw.labels),
     priority: raw.priority ?? '',
     status: raw.status ?? '',
+    parent: raw.parent ?? undefined,
+    parent_key: parentKey,
+    epic: raw.epic ?? undefined,
+    epic_key: epicKey,
     reach: toNumber(raw.reach) ?? null,
     impact: toNumber(raw.impact) ?? null,
     confidence: toNumber(raw.confidence) ?? null,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeJiraIssue } from '../apiNormalizers';
+import { normalizeJiraIssue, normalizeRiceIssue } from '../apiNormalizers';
 
 describe('normalizeJiraIssue', () => {
   it('normalizes parent, epic, epic_key, and children recursively', () => {
@@ -68,5 +68,20 @@ describe('normalizeJiraIssue', () => {
 
     expect(normalized.parent_key).toBe('TASK-1');
     expect(normalized.epic_key).toBe('EPIC-2');
+  });
+});
+
+describe('normalizeRiceIssue', () => {
+  it('preserves parent and epic hierarchy keys', () => {
+    const normalized = normalizeRiceIssue({
+      key: 'TASK-10',
+      summary: 'Scored task',
+      issue_type: 'Task',
+      parentKey: 'TASK-1',
+      epicKey: 'EPIC-1',
+    });
+
+    expect(normalized.parent_key).toBe('TASK-1');
+    expect(normalized.epic_key).toBe('EPIC-1');
   });
 });
