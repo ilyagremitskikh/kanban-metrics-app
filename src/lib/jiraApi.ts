@@ -4,6 +4,8 @@ import type {
   CreateIssueRequest,
   UpdateIssueRequest,
   AiGenerateResponse,
+  AiIssueContext,
+  ChecklistItem,
   OptimizeContext,
 } from '../types';
 import { getArrayField, getOptionalMeta, requestN8nJson, WEBHOOK_PATHS, type WebhookMeta } from './apiClient';
@@ -59,9 +61,15 @@ export async function createJiraIssue(
   n8nBaseUrl: string,
   data: CreateIssueRequest,
 ): Promise<{ status: string; key: string }> {
+  const body: CreateIssueRequest = {
+    ...data,
+    parent: data.parent ?? (data.parentKey ? { key: data.parentKey } : undefined),
+    epic: data.epic ?? (data.epicKey ? { key: data.epicKey } : undefined),
+  };
+
   return requestN8nJson<{ status: string; key: string }>(n8nBaseUrl, WEBHOOK_PATHS.jiraIssues, {
     method: 'POST',
-    body: data,
+    body,
   });
 }
 
@@ -84,10 +92,11 @@ export async function aiGenerate(
   n8nBaseUrl: string,
   issueType: string,
   userPrompt: string,
+  context: AiIssueContext = {},
 ): Promise<AiGenerateResponse> {
   return requestN8nJson<AiGenerateResponse>(n8nBaseUrl, WEBHOOK_PATHS.aiGenerate, {
     method: 'POST',
-    body: { issue_type: issueType, user_prompt: userPrompt },
+    body: { issue_type: issueType, user_prompt: userPrompt, ...context },
   });
 }
 
@@ -103,22 +112,14 @@ export async function aiOptimize(
   });
 }
 
-export interface AiChecklistContext {
-  issue_type: string;
-  summary: string;
-  description: string;
-}
-
 export async function aiChecklist(
   n8nBaseUrl: string,
-  context: AiChecklistContext,
-): Promise<import('../types').ChecklistItem[]> {
-  const data = await requestN8nJson<unknown>(n8nBaseUrl, WEBHOOK_PATHS.aiChecklist, {
+  context: { issue_type: string; summary: string; description: string } & AiIssueContext,
+): Promise<ChecklistItem[]> {
+  const result = await requestN8nJson<{ checklists?: ChecklistItem[] }>(n8nBaseUrl, WEBHOOK_PATHS.aiChecklist, {
     method: 'POST',
     body: context,
   });
-  if (!data || typeof data !== 'object' || !Array.isArray((data as { checklists?: unknown[] }).checklists)) {
-    return [];
-  }
-  return (data as { checklists: import('../types').ChecklistItem[] }).checklists;
+
+  return result.checklists ?? [];
 }
