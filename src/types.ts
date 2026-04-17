@@ -40,6 +40,58 @@ export interface ThroughputIssueRaw {
   resolutionDate: string | null;
 }
 
+export type SnapshotSchemaVersion = 1;
+export type ResourceSource = 'local' | 'remote';
+
+export interface PersistedMeta {
+  schemaVersion: SnapshotSchemaVersion;
+  savedAt: string;
+  lastSyncAt: string | null;
+  lastMutationAt: string | null;
+  source: ResourceSource;
+}
+
+export interface PersistedMetricsSnapshot {
+  key: string;
+  issues: Issue[];
+  throughputWeeks: ThroughputWeek[] | null;
+  meta: PersistedMeta;
+}
+
+export interface PersistedTasksSnapshot {
+  key: string;
+  jiraIssues: JiraIssueShort[];
+  riceIssues: RiceIssue[];
+  meta: PersistedMeta;
+}
+
+export interface TaskMutationPatch {
+  key: string;
+  summary?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  issuetype?: string;
+  parent_key?: string | null;
+  epic_key?: string | null;
+  labels?: string[];
+  created?: string;
+  updated?: string;
+  reach?: number | null;
+  impact?: number | null;
+  confidence?: number | null;
+  effort?: number | null;
+  rice_score?: number | null;
+  bug_risk?: number | null;
+  bug_process?: number | null;
+  bug_scale?: number | null;
+  bug_workaround?: number | null;
+  bug_score?: number | null;
+  td_impact?: number | null;
+  td_effort?: number | null;
+  td_roi?: number | null;
+}
+
 export type JQLMode = 'standard' | 'custom';
 export type MCMode = 'items' | 'date' | 'queue';
 export type QueueForecastMode = 'conservative' | 'realistic' | 'agingAware';
@@ -67,6 +119,10 @@ export interface RiceIssue {
   labels: string;
   priority: string;
   status: string;
+  parent?: JiraIssueRef | null;
+  parent_key?: string | null;
+  epic?: JiraIssueRef | null;
+  epic_key?: string | null;
   // RICE fields (User Story / Задача)
   reach: number | null;
   impact: number | null;
@@ -98,12 +154,36 @@ export interface ChecklistItem {
   status?: string | null;
 }
 
+export interface JiraIssueRef {
+  key: string;
+}
+
+export interface AiIssueContextRef {
+  key: string;
+  issuetype?: string;
+  summary?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  labels?: string[];
+}
+
+export interface AiIssueContext {
+  parent?: AiIssueContextRef;
+  epic?: AiIssueContextRef;
+}
+
 export interface JiraIssueShort {
   key: string;
   summary: string;
   status: string;
   priority: string;
   issuetype: string;
+  parent?: JiraIssueRef | null;
+  parent_key?: string | null;
+  epic?: JiraIssueRef | null;
+  epic_key?: string | null;
+  children?: JiraIssueShort[];
   score?: number | null;
   rice_score?: number | null;
   bug_score?: number | null;
@@ -156,6 +236,10 @@ export interface CreateIssueRequest {
   needToUpdateSource: string;
   slService: string;
   productCatalog: string;
+  parentKey?: string;
+  epicKey?: string;
+  parent?: JiraIssueRef;
+  epic?: JiraIssueRef;
   labels?: string[];
   checklists?: ChecklistItem[];
 }
@@ -172,7 +256,7 @@ export interface UpdateIssueRequest {
   checklists?: ChecklistItem[];
 }
 
-export interface OptimizeContext {
+export interface OptimizeContext extends AiIssueContext {
   issue_type?: string;
   summary?: string;
   description?: string;
