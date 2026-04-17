@@ -26,8 +26,6 @@ interface Props {
 
 export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated, onClose, layout = 'sheet', defaultIssueType }: Props) {
   const issueTypes = availableTypes.length ? availableTypes : ['User Story'];
-  // AI generator state
-  const [aiIssueType, setAiIssueType] = useState(defaultIssueType ?? issueTypes[0]);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -52,11 +50,11 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
     setAiLoading(true);
     setAiError(null);
     try {
-      const result = await aiGenerate(n8nBaseUrl, aiIssueType, aiPrompt);
+      const result = await aiGenerate(n8nBaseUrl, issuetype, aiPrompt);
       setSummary(result.summary ?? '');
       setDescription(result.description ?? '');
       setPriority(normalizePriority(result.priority ?? 'Medium'));
-      setIssuetype(result.issuetype ?? aiIssueType);
+      setIssuetype(result.issuetype ?? issuetype);
       if (result.checklists) setChecklists(result.checklists);
     } catch {
       setAiError('Ошибка ИИ-генерации. Проверьте подключение и повторите.');
@@ -94,8 +92,8 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
         updated: now,
       });
       onClose();
-    } catch {
-      setSubmitError('Не удалось создать задачу. Проверьте подключение и заполненность полей.');
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Не удалось создать задачу. Проверьте подключение и заполненность полей.');
     } finally {
       setSubmitting(false);
     }
@@ -107,72 +105,89 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
     <form onSubmit={handleSubmit} className={cn('flex flex-col', layout === 'page' ? 'min-h-[70vh]' : 'h-full')}>
       <div className={cn('flex-1 overflow-y-auto', layout === 'page' ? 'px-0 py-1' : 'px-6 py-5')}>
         <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-16">
-          <div className="flex min-w-0 flex-col gap-8">
-            <FormSection title="ИИ-черновик" className="rounded-md border border-violet-100 bg-violet-50/30 p-4">
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Тип задачи</Label>
-                  <select
-                    value={aiIssueType}
-                    onChange={e => setAiIssueType(e.target.value)}
-                    disabled={formDisabled}
-                    className="h-9 w-full cursor-pointer rounded-md border border-transparent bg-transparent px-2 text-sm font-medium text-foreground transition-colors hover:bg-background/80 focus:border-border focus:bg-background focus:ring-1 focus:ring-border focus:outline-none disabled:opacity-60"
-                  >
-                    {issueTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
+          <div className="flex min-w-0 flex-col gap-10">
+            <section className="flex flex-col gap-5">
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-semibold text-foreground">Опишите задачу для ИИ</span>
+                <p className="text-sm text-muted-foreground">
+                  Выберите тип задачи справа, затем дайте контекст. ИИ подготовит черновик заголовка, описания и чек-листа.
+                </p>
+              </div>
+
+              <div className="relative overflow-hidden rounded-3xl border border-violet-100/80 bg-gradient-to-br from-violet-50/80 via-background to-background p-4 shadow-sm shadow-violet-100/50">
+                <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-violet-200 to-transparent" />
+                <div className="flex flex-col gap-3">
+                  <Label className="text-sm font-medium text-muted-foreground">Контекст задачи</Label>
+                  <div className="group relative">
+                    <div className="pointer-events-none absolute left-4 top-4 flex size-8 items-center justify-center rounded-full bg-violet-500/10 text-violet-500">
+                      <Sparkles size={16} />
+                    </div>
+                    <Textarea
+                      value={aiPrompt}
+                      onChange={e => setAiPrompt(e.target.value)}
+                      disabled={formDisabled}
+                      placeholder="Опишите задачу в свободной форме. Например: «Нужна кнопка экспорта отчёта в PDF с выбором периода»"
+                      rows={4}
+                      className="min-h-[136px] resize-none rounded-2xl border-0 bg-background/80 py-4 pl-14 pr-4 text-sm leading-6 shadow-none ring-1 ring-transparent transition focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-violet-200 group-hover:bg-background disabled:opacity-60"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button
+                      type="button"
+                      onClick={handleAiGenerate}
+                      disabled={formDisabled || !aiPrompt.trim()}
+                      className="bg-violet-600 text-white shadow-sm shadow-violet-200 hover:bg-violet-700"
+                    >
+                      {aiLoading
+                        ? <><Loader2 size={14} className="animate-spin" /> Нейросеть формирует задачу...</>
+                        : <><Sparkles size={14} /> Сгенерировать</>
+                      }
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      Тип задачи для генерации: <span className="font-medium text-foreground">{issuetype}</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {aiError && <p className="text-xs text-red-600">{aiError}</p>}
+            </section>
+
+            <fieldset disabled={formDisabled} className="flex flex-col gap-10 disabled:opacity-60">
+              <div className="flex flex-col gap-8">
+                <div className="flex flex-col gap-3">
+                  <div className="text-sm font-semibold text-foreground">Черновик задачи</div>
+                  <p className="text-sm text-muted-foreground">Проверьте и дополните результат перед созданием задачи в Jira.</p>
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Контекст задачи</Label>
-                  <Textarea
-                    value={aiPrompt}
-                    onChange={e => setAiPrompt(e.target.value)}
-                    disabled={formDisabled}
-                    placeholder="Опишите задачу в свободной форме. Например: «Нужна кнопка экспорта отчёта в PDF с выбором периода»"
-                    rows={3}
-                    className="min-h-[96px] resize-none border-transparent bg-transparent shadow-none hover:bg-background/70 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-border disabled:opacity-60"
+                <div className="flex flex-col gap-8">
+                  <AiSummaryInput
+                    value={summary}
+                    onChange={setSummary}
+                    n8nBaseUrl={n8nBaseUrl}
+                    context={{ issue_type: issuetype, summary, description }}
+                    variant="title"
+                    label="Краткое описание задачи"
+                  />
+
+                  <AiDescriptionDiff
+                    value={description}
+                    onChange={setDescription}
+                    n8nBaseUrl={n8nBaseUrl}
+                    context={{ issue_type: issuetype, summary, description }}
+                    label="Описание"
                   />
                 </div>
-
-                {aiError && <p className="text-xs text-red-600">{aiError}</p>}
-
-                <Button
-                  type="button"
-                  onClick={handleAiGenerate}
-                  disabled={formDisabled || !aiPrompt.trim()}
-                  variant="ghost"
-                  className="self-start px-0 text-violet-500 hover:bg-transparent hover:text-violet-700"
-                >
-                  {aiLoading
-                    ? <><Loader2 size={14} className="animate-spin" /> Нейросеть формирует задачу...</>
-                    : <><Sparkles size={14} /> Сгенерировать</>
-                  }
-                </Button>
               </div>
-            </FormSection>
 
-            <fieldset disabled={formDisabled} className="flex flex-col gap-8 disabled:opacity-60">
-              <AiSummaryInput
-                value={summary}
-                onChange={setSummary}
-                n8nBaseUrl={n8nBaseUrl}
-                context={{ issue_type: issuetype, summary, description }}
-                variant="title"
-              />
-
-              <AiDescriptionDiff
-                value={description}
-                onChange={setDescription}
-                n8nBaseUrl={n8nBaseUrl}
-                context={{ issue_type: issuetype, summary, description }}
-              />
-
-              <FormSection title="Чеклист">
+              <FormSection title="Чек-лист">
                 <ChecklistEditor
                   value={checklists}
                   onChange={setChecklists}
                   n8nBaseUrl={n8nBaseUrl}
                   context={{ issue_type: issuetype, summary, description }}
+                  showLabel={false}
                 />
               </FormSection>
             </fieldset>

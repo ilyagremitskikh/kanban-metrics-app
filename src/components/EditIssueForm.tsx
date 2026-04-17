@@ -206,6 +206,7 @@ export default function EditIssueForm({ n8nBaseUrl, availableTypes, issueKey, on
                 value={checklists}
                 onChange={setChecklists}
                 n8nBaseUrl={n8nBaseUrl}
+                showLabel={false}
                 context={{ issue_type: fallbackIssueType, summary, description }}
               />
             </FormSection>

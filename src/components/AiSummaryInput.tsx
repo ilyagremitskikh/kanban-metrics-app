@@ -73,7 +73,7 @@ export default function AiSummaryInput({
           className={cn(
             'w-full border-transparent bg-transparent px-2 pr-11 shadow-none transition-colors hover:bg-muted/60 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-border disabled:opacity-60',
             variant === 'title'
-              ? 'h-auto min-h-12 py-2 text-2xl font-semibold leading-tight'
+              ? 'h-auto min-h-14 rounded-xl px-0 py-1 pr-12 text-2xl font-semibold leading-tight tracking-tight hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0'
               : 'h-10 text-sm',
             highlighted && 'border-border bg-background ring-1 ring-violet-200',
           )}
@@ -84,7 +84,10 @@ export default function AiSummaryInput({
           disabled={loading || !value.trim()}
           variant="ghost"
           size="icon"
-          className="absolute right-1 top-1/2 size-8 -translate-y-1/2 text-violet-500 hover:bg-violet-50 hover:text-violet-700"
+          className={cn(
+            'absolute right-1 top-1/2 size-8 -translate-y-1/2 text-violet-500 hover:bg-violet-50 hover:text-violet-700',
+            variant === 'title' && 'right-0',
+          )}
           title="Оптимизировать с ИИ"
         >
           {loading

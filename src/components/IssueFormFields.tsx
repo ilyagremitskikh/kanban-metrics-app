@@ -231,6 +231,7 @@ interface ChecklistEditorProps {
   value: ChecklistItem[];
   onChange: (v: ChecklistItem[]) => void;
   n8nBaseUrl?: string;
+  showLabel?: boolean;
   context?: {
     issue_type: string;
     summary: string;
@@ -238,7 +239,7 @@ interface ChecklistEditorProps {
   } & AiIssueContext;
 }
 
-export function ChecklistEditor({ value, onChange, n8nBaseUrl, context }: ChecklistEditorProps) {
+export function ChecklistEditor({ value, onChange, n8nBaseUrl, showLabel = true, context }: ChecklistEditorProps) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
@@ -287,7 +288,7 @@ export function ChecklistEditor({ value, onChange, n8nBaseUrl, context }: Checkl
 
   return (
     <div className="flex flex-col gap-3">
-      <Label className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Чеклист</Label>
+      {showLabel ? <Label className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Чеклист</Label> : null}
 
       {value.length > 0 && (
         <div className="flex flex-col gap-1">
