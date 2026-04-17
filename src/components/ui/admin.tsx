@@ -43,19 +43,21 @@ export function SectionCard({
   action,
   children,
   className,
+  titleClassName,
 }: {
   title?: string;
   description?: string;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
+  titleClassName?: string;
 }) {
   return (
     <Card className={cn('rounded-2xl', className)}>
       {(title || action) && (
         <CardHeader className="flex-row items-start justify-between gap-4 border-b border-border/80 py-3">
           <div className="space-y-1">
-            {title ? <CardTitle>{title}</CardTitle> : null}
+            {title ? <CardTitle className={titleClassName}>{title}</CardTitle> : null}
             {description ? <CardDescription>{description}</CardDescription> : null}
           </div>
           {action ? <div className="shrink-0">{action}</div> : null}

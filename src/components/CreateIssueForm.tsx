@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Sparkles, Loader2, Send } from 'lucide-react';
 import { aiGenerate, createJiraIssue } from '../lib/jiraApi';
-import type { ChecklistItem } from '../types';
+import type { ChecklistItem, TaskMutationPatch } from '../types';
 import { normalizePriority } from '../lib/priorities';
 import AiSummaryInput from './AiSummaryInput';
 import AiDescriptionDiff from './AiDescriptionDiff';
+import ChildIssuesPanel from './ChildIssuesPanel';
 import { FormSection, type IssueFormLayoutMode } from './IssueFormLayout';
 import { PrioritySelect, IssueTypeSelect, LabelsInput, ChecklistEditor } from './IssueFormFields';
 import { Button } from '@/components/ui/button';
@@ -12,21 +13,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
 interface Props {
   n8nBaseUrl: string;
   availableTypes: string[];
-  onCreated: (key: string) => void;
+  onCreated: (patch: TaskMutationPatch) => void;
   onClose: () => void;
   layout?: IssueFormLayoutMode;
+  defaultIssueType?: string;
 }
 
-export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated, onClose, layout = 'sheet' }: Props) {
+export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated, onClose, layout = 'sheet', defaultIssueType }: Props) {
   const issueTypes = availableTypes.length ? availableTypes : ['User Story'];
-  // AI generator state
-  const [aiIssueType, setAiIssueType] = useState(issueTypes[0]);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -35,7 +34,7 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('Нормальный');
-  const [issuetype, setIssuetype] = useState(issueTypes[0]);
+  const [issuetype, setIssuetype] = useState(defaultIssueType ?? issueTypes[0]);
   const [needToUpdateSource, setNeedToUpdateSource] = useState(false);
   const [slService, setSlService] = useState('TB\\expresscredit');
   const [productCatalog, setProductCatalog] = useState('Экспресс-кредит');
@@ -51,12 +50,12 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
     setAiLoading(true);
     setAiError(null);
     try {
-      const result = await aiGenerate(n8nBaseUrl, aiIssueType, aiPrompt);
+      const result = await aiGenerate(n8nBaseUrl, issuetype, aiPrompt);
       setSummary(result.summary ?? '');
       setDescription(result.description ?? '');
       setPriority(normalizePriority(result.priority ?? 'Medium'));
-      setIssuetype(result.issuetype ?? aiIssueType);
-      if (result.checklists?.length) setChecklists(result.checklists);
+      setIssuetype(result.issuetype ?? issuetype);
+      if (result.checklists) setChecklists(result.checklists);
     } catch {
       setAiError('Ошибка ИИ-генерации. Проверьте подключение и повторите.');
     } finally {
@@ -70,6 +69,7 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const now = new Date().toISOString();
       const { key } = await createJiraIssue(n8nBaseUrl, {
         summary,
         description,
@@ -81,10 +81,19 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
         labels: labels.length ? labels : undefined,
         checklists: checklists.length ? checklists : undefined,
       });
-      onCreated(key);
+      onCreated({
+        key,
+        summary,
+        description,
+        priority,
+        issuetype,
+        labels,
+        created: now,
+        updated: now,
+      });
       onClose();
-    } catch {
-      setSubmitError('Не удалось создать задачу. Проверьте подключение и заполненность полей.');
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Не удалось создать задачу. Проверьте подключение и заполненность полей.');
     } finally {
       setSubmitting(false);
     }
@@ -94,132 +103,159 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
 
   return (
     <form onSubmit={handleSubmit} className={cn('flex flex-col', layout === 'page' ? 'min-h-[70vh]' : 'h-full')}>
-      <div className={cn('flex flex-1 flex-col gap-4 overflow-y-auto', layout === 'page' ? 'px-0 py-1' : 'px-6 py-5')}>
-        <FormSection
-          title="ИИ-черновик"
-          className="border-blue-200 bg-blue-50/50"
-        >
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <Label className="mb-2 block">Тип задачи</Label>
-              <select
-                value={aiIssueType}
-                onChange={e => setAiIssueType(e.target.value)}
-                disabled={formDisabled}
-                className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm
-                  focus:border-blue-600 focus:ring-2 focus:ring-blue-100 focus:outline-none
-                  transition-all duration-200 cursor-pointer disabled:opacity-60"
-              >
-                {issueTypes.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
+      <div className={cn('flex-1 overflow-y-auto', layout === 'page' ? 'px-0 py-1' : 'px-6 py-5')}>
+        <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-16">
+          <div className="flex min-w-0 flex-col gap-10">
+            <section className="flex flex-col gap-5">
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-semibold text-foreground">Опишите задачу для ИИ</span>
+                <p className="text-sm text-muted-foreground">
+                  Выберите тип задачи справа, затем дайте контекст. ИИ подготовит черновик заголовка, описания и чек-листа.
+                </p>
+              </div>
 
-            <div className="flex flex-col gap-1">
-              <Label className="mb-2 block">Контекст задачи</Label>
-              <Textarea
-                value={aiPrompt}
-                onChange={e => setAiPrompt(e.target.value)}
-                disabled={formDisabled}
-                placeholder="Опишите задачу в свободной форме. Например: «Нужна кнопка экспорта отчёта в PDF с выбором периода»"
-                rows={3}
-                className="min-h-[90px] resize-none border-white/60 bg-white disabled:opacity-60"
-              />
-            </div>
+              <div className="relative overflow-hidden rounded-3xl border border-violet-100/80 bg-gradient-to-br from-violet-50/80 via-background to-background p-4 shadow-sm shadow-violet-100/50">
+                <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-violet-200 to-transparent" />
+                <div className="flex flex-col gap-3">
+                  <Label className="text-sm font-medium text-muted-foreground">Контекст задачи</Label>
+                  <div className="group relative">
+                    <div className="pointer-events-none absolute left-4 top-4 flex size-8 items-center justify-center rounded-full bg-violet-500/10 text-violet-500">
+                      <Sparkles size={16} />
+                    </div>
+                    <Textarea
+                      value={aiPrompt}
+                      onChange={e => setAiPrompt(e.target.value)}
+                      disabled={formDisabled}
+                      placeholder="Опишите задачу в свободной форме. Например: «Нужна кнопка экспорта отчёта в PDF с выбором периода»"
+                      rows={4}
+                      className="min-h-[136px] resize-none rounded-2xl border-0 bg-background/80 py-4 pl-14 pr-4 text-sm leading-6 shadow-none ring-1 ring-transparent transition focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-violet-200 group-hover:bg-background disabled:opacity-60"
+                    />
+                  </div>
 
-            {aiError && <p className="text-xs text-red-600">{aiError}</p>}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button
+                      type="button"
+                      onClick={handleAiGenerate}
+                      disabled={formDisabled || !aiPrompt.trim()}
+                      className="bg-violet-600 text-white shadow-sm shadow-violet-200 hover:bg-violet-700"
+                    >
+                      {aiLoading
+                        ? <><Loader2 size={14} className="animate-spin" /> Нейросеть формирует задачу...</>
+                        : <><Sparkles size={14} /> Сгенерировать</>
+                      }
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      Тип задачи для генерации: <span className="font-medium text-foreground">{issuetype}</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-            <Button
-              type="button"
-              onClick={handleAiGenerate}
-              disabled={formDisabled || !aiPrompt.trim()}
-              className="self-start"
-            >
-              {aiLoading
-                ? <><Loader2 size={14} className="animate-spin" /> Нейросеть формирует задачу...</>
-                : <><Sparkles size={14} /> Сгенерировать</>
-              }
-            </Button>
+              {aiError && <p className="text-xs text-red-600">{aiError}</p>}
+            </section>
+
+            <fieldset disabled={formDisabled} className="flex flex-col gap-10 disabled:opacity-60">
+              <div className="flex flex-col gap-8">
+                <div className="flex flex-col gap-3">
+                  <div className="text-sm font-semibold text-foreground">Черновик задачи</div>
+                  <p className="text-sm text-muted-foreground">Проверьте и дополните результат перед созданием задачи в Jira.</p>
+                </div>
+
+                <div className="flex flex-col gap-8">
+                  <AiSummaryInput
+                    value={summary}
+                    onChange={setSummary}
+                    n8nBaseUrl={n8nBaseUrl}
+                    context={{ issue_type: issuetype, summary, description }}
+                    variant="title"
+                    label="Краткое описание задачи"
+                  />
+
+                  <AiDescriptionDiff
+                    value={description}
+                    onChange={setDescription}
+                    n8nBaseUrl={n8nBaseUrl}
+                    context={{ issue_type: issuetype, summary, description }}
+                    label="Описание"
+                  />
+                </div>
+              </div>
+
+              <FormSection title="Чек-лист">
+                <ChecklistEditor
+                  value={checklists}
+                  onChange={setChecklists}
+                  n8nBaseUrl={n8nBaseUrl}
+                  context={{ issue_type: issuetype, summary, description }}
+                  showLabel={false}
+                />
+              </FormSection>
+            </fieldset>
           </div>
-        </FormSection>
 
-        <fieldset disabled={formDisabled} className="flex flex-col gap-4 disabled:opacity-60">
-          <AiSummaryInput
-            value={summary}
-            onChange={setSummary}
-            n8nBaseUrl={n8nBaseUrl}
-            context={{ issue_type: issuetype, summary, description }}
-          />
+          <aside className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-4 lg:self-start">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Задача</span>
+              <span className="text-sm font-medium text-foreground">New issue</span>
+            </div>
 
-          <AiDescriptionDiff
-            value={description}
-            onChange={setDescription}
-            n8nBaseUrl={n8nBaseUrl}
-            context={{ issue_type: issuetype, summary, description }}
-          />
-
-          <FormSection title="Основные поля">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <PrioritySelect value={priority} onChange={setPriority} />
+            <fieldset disabled={formDisabled} className="flex flex-col gap-5 disabled:opacity-60">
               <IssueTypeSelect value={issuetype} availableTypes={issueTypes} onChange={setIssuetype} />
-            </div>
-          </FormSection>
+              <PrioritySelect value={priority} onChange={setPriority} />
+              <LabelsInput value={labels} onChange={setLabels} />
 
-          <FormSection title="Служебные атрибуты">
-            <div
-              className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/20 p-4"
-              onClick={() => setNeedToUpdateSource(v => !v)}
-            >
-              <input
-                type="checkbox"
-                checked={needToUpdateSource}
-                onChange={e => setNeedToUpdateSource(e.target.checked)}
-                onClick={e => e.stopPropagation()}
-                className="mt-0.5 w-4 h-4 rounded accent-blue-600 flex-shrink-0 cursor-pointer"
+              <FormSection title="Служебные атрибуты">
+                <div className="flex flex-col gap-4">
+                  <div
+                    className="flex cursor-pointer items-start gap-3 rounded-md border border-transparent px-2 py-2 transition-colors hover:bg-muted/60"
+                    onClick={() => setNeedToUpdateSource(v => !v)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={needToUpdateSource}
+                      onChange={e => setNeedToUpdateSource(e.target.checked)}
+                      onClick={e => e.stopPropagation()}
+                      className="mt-0.5 h-4 w-4 flex-shrink-0 cursor-pointer rounded accent-slate-700"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Нужно обновить информацию в источнике?</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">Отметьте, если после выполнения задачи необходимо обновить документацию или источник данных</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">SL Service</Label>
+                    <Input
+                      type="text"
+                      value={slService}
+                      onChange={e => setSlService(e.target.value)}
+                      className="border-transparent bg-transparent shadow-none hover:bg-muted/60 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-border"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Product Catalog</Label>
+                    <Input
+                      type="text"
+                      value={productCatalog}
+                      onChange={e => setProductCatalog(e.target.value)}
+                      className="border-transparent bg-transparent shadow-none hover:bg-muted/60 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-border"
+                    />
+                  </div>
+                </div>
+              </FormSection>
+
+              <ChildIssuesPanel
+                n8nBaseUrl={n8nBaseUrl}
+                availableTypes={issueTypes}
+                mode="create"
+                onCreated={() => undefined}
               />
-              <div>
-                <p className="text-sm font-medium text-gray-800">Нужно обновить информацию в источнике?</p>
-                <p className="text-xs text-gray-400 mt-0.5">Отметьте, если после выполнения задачи необходимо обновить документацию или источник данных</p>
-              </div>
-            </div>
-
-            <Separator className="my-4" />
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="flex flex-col gap-1">
-                <Label className="mb-2 block">SL Service</Label>
-                <Input
-                  type="text"
-                  value={slService}
-                  onChange={e => setSlService(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label className="mb-2 block">Product Catalog</Label>
-                <Input
-                  type="text"
-                  value={productCatalog}
-                  onChange={e => setProductCatalog(e.target.value)}
-                />
-              </div>
-            </div>
-          </FormSection>
-
-          <FormSection title="Метки">
-            <LabelsInput value={labels} onChange={setLabels} />
-          </FormSection>
-
-          <FormSection title="Чеклист">
-            <ChecklistEditor
-              value={checklists}
-              onChange={setChecklists}
-              n8nBaseUrl={n8nBaseUrl}
-              context={{ issue_type: issuetype, summary, description }}
-            />
-          </FormSection>
-        </fieldset>
+            </fieldset>
+          </aside>
+        </div>
       </div>
 
-      <div className={cn('flex-shrink-0 border-t border-border bg-background', layout === 'page' ? 'sticky bottom-0 px-0 py-4' : 'px-6 py-4')}>
+      <div className={cn('flex-shrink-0 border-t border-border/70 bg-background/95 backdrop-blur', layout === 'page' ? 'sticky bottom-0 px-0 py-4' : 'px-6 py-4')}>
         {submitError && <Alert variant="destructive" className="mb-3"><AlertDescription>{submitError}</AlertDescription></Alert>}
         <div className="flex items-center gap-3">
           <Button
@@ -234,7 +270,7 @@ export default function CreateIssueForm({ n8nBaseUrl, availableTypes, onCreated,
           <Button
             type="button"
             onClick={onClose}
-            variant="secondary"
+            variant="ghost"
           >
             {layout === 'page' ? 'Назад к списку' : 'Отмена'}
           </Button>

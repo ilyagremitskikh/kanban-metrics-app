@@ -5,6 +5,7 @@ import type { OptimizeContext } from '../types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 interface Props {
   value: string;
@@ -13,6 +14,7 @@ interface Props {
   context?: OptimizeContext;
   label?: string;
   placeholder?: string;
+  variant?: 'default' | 'title';
 }
 
 export default function AiSummaryInput({
@@ -22,6 +24,7 @@ export default function AiSummaryInput({
   context,
   label = 'Заголовок (Summary)',
   placeholder = 'Краткое описание задачи',
+  variant = 'default',
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,9 +59,9 @@ export default function AiSummaryInput({
   };
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-2">
       {label && (
-        <Label className="mb-2 block">{label}</Label>
+        <Label className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{label}</Label>
       )}
       <div className="relative">
         <Input
@@ -67,12 +70,13 @@ export default function AiSummaryInput({
           onChange={e => onChange(e.target.value)}
           placeholder={placeholder}
           disabled={loading}
-          className={`h-10 w-full bg-background px-3 pr-10 text-sm transition-all duration-200
-            focus:bg-white focus:outline-none disabled:opacity-60
-            ${highlighted
-              ? 'border-blue-600 ring-2 ring-blue-100 bg-white'
-              : 'border-input focus:border-blue-600 focus:ring-2 focus:ring-blue-100'
-            }`}
+          className={cn(
+            'w-full border-transparent bg-transparent px-2 pr-11 shadow-none transition-colors hover:bg-muted/60 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-border disabled:opacity-60',
+            variant === 'title'
+              ? 'h-auto min-h-14 rounded-xl px-0 py-1 pr-12 text-2xl font-semibold leading-tight tracking-tight hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0'
+              : 'h-10 text-sm',
+            highlighted && 'border-border bg-background ring-1 ring-violet-200',
+          )}
         />
         <Button
           type="button"
@@ -80,7 +84,10 @@ export default function AiSummaryInput({
           disabled={loading || !value.trim()}
           variant="ghost"
           size="icon"
-          className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600"
+          className={cn(
+            'absolute right-1 top-1/2 size-8 -translate-y-1/2 text-violet-500 hover:bg-violet-50 hover:text-violet-700',
+            variant === 'title' && 'right-0',
+          )}
           title="Оптимизировать с ИИ"
         >
           {loading
@@ -100,7 +107,7 @@ export default function AiSummaryInput({
           onClick={handleUndo}
           variant="ghost"
           size="sm"
-          className="self-start px-0 text-xs text-gray-400 hover:text-blue-600"
+          className="self-start px-0 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground"
         >
           <Undo2 size={12} />
           Отменить
