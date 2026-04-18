@@ -205,4 +205,15 @@ describe('task hierarchy helpers', () => {
 
     expect(collectIssueKeys(rows)).toEqual(['CREDITS-2', 'CREDITS-3']);
   });
+
+  it('does not crash when some loaded issues have invalid keys', () => {
+    const rows = buildTaskHierarchyTableRows([
+      issue({ key: 'CREDITS-1', issuetype: 'Epic' }),
+      issue({ key: 'CREDITS-2', epic_key: 'CREDITS-1' }),
+      issue({ key: null as unknown as string, epic_key: 'CREDITS-1' }),
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].subRows.map((row) => row.issue?.key)).toEqual(['CREDITS-2', null]);
+  });
 });

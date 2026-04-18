@@ -11,6 +11,8 @@ import type {
   TaskMutationPatch,
   ThroughputWeek,
 } from '../types';
+import { normalizeJiraIssue, normalizeRiceIssue } from './apiNormalizers';
+import { normalizeIssueKey, requireIssueKey } from './issueKeys';
 
 const DB_NAME = 'kanban-metrics-app';
 const DB_VERSION = 1;
@@ -23,6 +25,11 @@ type StoreName = typeof METRICS_STORE | typeof TASKS_STORE;
 interface PersistedRecord<T> {
   key: string;
   value: T;
+}
+
+interface SanitizedSnapshotResult {
+  snapshot: PersistedTasksSnapshot;
+  changed: boolean;
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -133,9 +140,90 @@ function mergeDefined<T extends object>(base: T, patch: Partial<T>): T {
   return next;
 }
 
+function sanitizeString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function sanitizeLabels(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((label): label is string => typeof label === 'string');
+}
+
+function sanitizeJiraIssue(issue: JiraIssueShort): JiraIssueShort | null {
+  const key = normalizeIssueKey(issue.key);
+  if (!key) return null;
+
+  const normalized = normalizeJiraIssue(issue as Parameters<typeof normalizeJiraIssue>[0]);
+  const children = Array.isArray(normalized.children)
+    ? normalized.children
+      .map((child) => sanitizeJiraIssue(child))
+      .filter((child): child is JiraIssueShort => child !== null)
+    : undefined;
+
+  return {
+    ...normalized,
+    key,
+    summary: sanitizeString(normalized.summary),
+    status: sanitizeString(normalized.status),
+    priority: sanitizeString(normalized.priority),
+    issuetype: sanitizeString(normalized.issuetype),
+    description: typeof normalized.description === 'string' ? normalized.description : undefined,
+    labels: sanitizeLabels(normalized.labels),
+    parent_key: normalizeIssueKey(normalized.parent_key) ?? undefined,
+    epic_key: normalizeIssueKey(normalized.epic_key) ?? undefined,
+    children,
+  };
+}
+
+function sanitizeRiceIssue(issue: RiceIssue): RiceIssue | null {
+  const key = normalizeIssueKey(issue.key);
+  if (!key) return null;
+
+  const normalized = normalizeRiceIssue(issue as Parameters<typeof normalizeRiceIssue>[0]);
+  return {
+    ...normalized,
+    key,
+    summary: sanitizeString(normalized.summary),
+    issue_type: sanitizeString(normalized.issue_type),
+    labels: sanitizeString(normalized.labels),
+    priority: sanitizeString(normalized.priority),
+    status: sanitizeString(normalized.status),
+    parent_key: normalizeIssueKey(normalized.parent_key) ?? undefined,
+    epic_key: normalizeIssueKey(normalized.epic_key) ?? undefined,
+  };
+}
+
+export function sanitizeTasksSnapshot(snapshot: PersistedTasksSnapshot): SanitizedSnapshotResult {
+  const jiraIssues = snapshot.jiraIssues
+    .map((issue) => sanitizeJiraIssue(issue))
+    .filter((issue): issue is JiraIssueShort => issue !== null);
+  const riceIssues = snapshot.riceIssues
+    .map((issue) => sanitizeRiceIssue(issue))
+    .filter((issue): issue is RiceIssue => issue !== null);
+
+  const normalizedKey = buildTasksSnapshotKey(snapshot.key);
+  const nextSnapshot: PersistedTasksSnapshot = {
+    ...snapshot,
+    key: normalizedKey,
+    jiraIssues,
+    riceIssues,
+  };
+
+  const changed = JSON.stringify(snapshot) !== JSON.stringify(nextSnapshot);
+  return { snapshot: nextSnapshot, changed };
+}
+
+function ensureValidTaskPatch(patch: TaskMutationPatch): TaskMutationPatch & { key: string } {
+  return {
+    ...patch,
+    key: requireIssueKey(patch.key, 'Некорректный ключ задачи в локальном обновлении'),
+  };
+}
+
 function buildMinimalJiraIssue(patch: TaskMutationPatch, existing?: JiraIssueShort): JiraIssueShort {
+  const key = requireIssueKey(patch.key, 'Некорректный ключ задачи в локальном обновлении');
   const base = existing ?? {
-    key: patch.key,
+    key,
     summary: '',
     status: '',
     priority: '',
@@ -144,7 +232,7 @@ function buildMinimalJiraIssue(patch: TaskMutationPatch, existing?: JiraIssueSho
   };
 
   return mergeDefined(base, {
-    key: patch.key,
+    key,
     summary: patch.summary,
     description: patch.description,
     status: patch.status,
@@ -172,8 +260,9 @@ function buildMinimalJiraIssue(patch: TaskMutationPatch, existing?: JiraIssueSho
 }
 
 function buildRiceIssueFromTaskPatch(patch: TaskMutationPatch, existing?: RiceIssue): RiceIssue {
+  const key = requireIssueKey(patch.key, 'Некорректный ключ задачи в локальном обновлении');
   const base = existing ?? {
-    key: patch.key,
+    key,
     summary: '',
     issue_type: '',
     labels: '',
@@ -199,7 +288,7 @@ function buildRiceIssueFromTaskPatch(patch: TaskMutationPatch, existing?: RiceIs
   };
 
   return mergeDefined(base, {
-    key: patch.key,
+    key,
     summary: patch.summary,
     issue_type: patch.issuetype,
     labels: patch.labels ? patch.labels.join(', ') : undefined,
@@ -224,24 +313,26 @@ function buildRiceIssueFromTaskPatch(patch: TaskMutationPatch, existing?: RiceIs
 }
 
 export function upsertTaskList(issues: JiraIssueShort[], patch: TaskMutationPatch): JiraIssueShort[] {
-  const index = issues.findIndex((issue) => issue.key === patch.key);
+  const nextPatch = ensureValidTaskPatch(patch);
+  const index = issues.findIndex((issue) => issue.key === nextPatch.key);
   if (index === -1) {
-    return [buildMinimalJiraIssue(patch), ...issues];
+    return [buildMinimalJiraIssue(nextPatch), ...issues];
   }
 
   const next = [...issues];
-  next[index] = buildMinimalJiraIssue(patch, next[index]);
+  next[index] = buildMinimalJiraIssue(nextPatch, next[index]);
   return next;
 }
 
 export function upsertRiceIssueList(issues: RiceIssue[], patch: TaskMutationPatch): RiceIssue[] {
-  const index = issues.findIndex((issue) => issue.key === patch.key);
+  const nextPatch = ensureValidTaskPatch(patch);
+  const index = issues.findIndex((issue) => issue.key === nextPatch.key);
   if (index === -1) {
-    return [buildRiceIssueFromTaskPatch(patch), ...issues];
+    return [buildRiceIssueFromTaskPatch(nextPatch), ...issues];
   }
 
   const next = [...issues];
-  next[index] = buildRiceIssueFromTaskPatch(patch, next[index]);
+  next[index] = buildRiceIssueFromTaskPatch(nextPatch, next[index]);
   return next;
 }
 
@@ -322,7 +413,15 @@ export async function saveMetricsSnapshot(queryKey: string, snapshot: PersistedM
 }
 
 export async function loadTasksSnapshot(baseUrlKey: string): Promise<PersistedTasksSnapshot | null> {
-  return getRecord<PersistedTasksSnapshot>(TASKS_STORE, baseUrlKey);
+  const snapshot = await getRecord<PersistedTasksSnapshot>(TASKS_STORE, baseUrlKey);
+  if (!snapshot) return null;
+
+  const { snapshot: sanitizedSnapshot, changed } = sanitizeTasksSnapshot(snapshot);
+  if (changed) {
+    await putRecord(TASKS_STORE, sanitizedSnapshot.key, sanitizedSnapshot);
+  }
+
+  return sanitizedSnapshot;
 }
 
 export async function saveTasksSnapshot(baseUrlKey: string, snapshot: PersistedTasksSnapshot): Promise<void> {

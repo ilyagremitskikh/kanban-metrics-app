@@ -6,6 +6,7 @@ import {
   buildMetricsSnapshotKey,
   buildTasksSnapshotKey,
   createTasksSnapshot,
+  sanitizeTasksSnapshot,
 } from '../snapshots';
 import type { Settings } from '../../types';
 
@@ -208,5 +209,92 @@ describe('snapshots helpers', () => {
     expect(next.jiraIssues[0].bug_score).toBe(100);
     expect(next.riceIssues[0].bug_score).toBe(100);
     expect(next.meta.source).toBe('local');
+  });
+
+  it('sanitizes broken task snapshot entries with empty keys', () => {
+    const { snapshot, changed } = sanitizeTasksSnapshot({
+      key: 'https://n8n.example.com/',
+      jiraIssues: [
+        {
+          key: 'CRED-1',
+          summary: 'Нормальная задача',
+          status: 'Backlog',
+          priority: 'Нормальный',
+          issuetype: 'Задача',
+        },
+        {
+          key: null as unknown as string,
+          summary: 'Битая задача',
+          status: 'Backlog',
+          priority: 'Нормальный',
+          issuetype: 'Задача',
+        },
+      ],
+      riceIssues: [
+        {
+          key: 'CRED-1',
+          summary: 'Нормальная задача',
+          issue_type: 'Задача',
+          labels: '',
+          priority: 'Нормальный',
+          status: 'Backlog',
+          reach: null,
+          impact: null,
+          confidence: null,
+          effort: null,
+          rice_score: null,
+          bug_risk: null,
+          bug_process: null,
+          bug_scale: null,
+          bug_workaround: null,
+          bug_score: null,
+          td_impact: null,
+          td_effort: null,
+          td_roi: null,
+        },
+        {
+          key: '' as unknown as string,
+          summary: 'Битая оценка',
+          issue_type: 'Задача',
+          labels: '',
+          priority: 'Нормальный',
+          status: 'Backlog',
+          reach: null,
+          impact: null,
+          confidence: null,
+          effort: null,
+          rice_score: null,
+          bug_risk: null,
+          bug_process: null,
+          bug_scale: null,
+          bug_workaround: null,
+          bug_score: null,
+          td_impact: null,
+          td_effort: null,
+          td_roi: null,
+        },
+      ],
+      meta: {
+        schemaVersion: 1,
+        savedAt: '2026-04-15T00:00:00.000Z',
+        lastSyncAt: '2026-04-15T00:00:00.000Z',
+        lastMutationAt: null,
+        source: 'local',
+      },
+    });
+
+    expect(changed).toBe(true);
+    expect(snapshot.key).toBe('https://n8n.example.com');
+    expect(snapshot.jiraIssues).toHaveLength(1);
+    expect(snapshot.riceIssues).toHaveLength(1);
+    expect(snapshot.jiraIssues[0].key).toBe('CRED-1');
+    expect(snapshot.riceIssues[0].key).toBe('CRED-1');
+  });
+
+  it('rejects local patches with invalid keys', () => {
+    expect(() => applyTaskPatchToSnapshot(null, 'https://n8n.example.com', {
+      key: '' as unknown as string,
+      summary: 'Битая задача',
+    })).toThrow('Некорректный ключ задачи в локальном обновлении');
   });
 });

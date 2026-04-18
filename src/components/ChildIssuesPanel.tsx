@@ -196,8 +196,8 @@ export default function ChildIssuesPanel({ n8nBaseUrl, availableTypes, mode, par
       resetForm();
       setDraftOpen(false);
       onCreated(childPatch);
-    } catch {
-      setSubmitError('Не удалось создать дочернюю задачу. Проверьте подключение и повторите.');
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Не удалось создать дочернюю задачу. Проверьте подключение и повторите.');
     } finally {
       setSubmitting(false);
     }

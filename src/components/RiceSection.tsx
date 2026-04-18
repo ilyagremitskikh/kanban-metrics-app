@@ -3,6 +3,7 @@ import type { ColumnDef, Row } from '@tanstack/react-table';
 import { ChevronDown, ClipboardList, Info, Layers2 } from 'lucide-react';
 import { InlineNumberInput } from './InlineNumberInput';
 import { saveRiceScores, type RiceUpdate } from '../lib/riceApi';
+import { compareIssueKeys } from '../lib/issueKeys';
 import type { PrioritizationIssue, PrioritizationTableRow, PrioritizationTaskRow } from '../lib/prioritization';
 import { buildPrioritizationHierarchy, buildScoreInheritanceUpdates, preparePrioritizationData } from '../lib/prioritization';
 import { JIRA_BASE_URL, type RiceIssue } from '../types';
@@ -458,7 +459,7 @@ export function RiceSection({
       const sb = calcScore(scores.get(b.key) ?? initRow(b)) ?? -1;
       return sortDir === 'desc' ? sb - sa : sa - sb;
     }
-    return sortDir === 'asc' ? a.key.localeCompare(b.key) : b.key.localeCompare(a.key);
+    return sortDir === 'asc' ? compareIssueKeys(a.key, b.key) : compareIssueKeys(a.key, b.key, 'desc');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [featuresData, sortTrigger, sortField, sortDir]);
 
@@ -468,7 +469,7 @@ export function RiceSection({
       const sb = calcBugScore(bugScores.get(b.key) ?? initBugRow(b)) ?? -1;
       return bugSortDir === 'desc' ? sb - sa : sa - sb;
     }
-    return bugSortDir === 'asc' ? a.key.localeCompare(b.key) : b.key.localeCompare(a.key);
+    return bugSortDir === 'asc' ? compareIssueKeys(a.key, b.key) : compareIssueKeys(a.key, b.key, 'desc');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [bugsData, bugSortField, bugSortDir]);
 

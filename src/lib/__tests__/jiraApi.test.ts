@@ -94,4 +94,72 @@ describe('jiraApi AI and create contracts', () => {
       }),
     );
   });
+
+  it('treats a created response with a valid key as success', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'created', key: 'CREDITS-1' }),
+    } as Response);
+
+    await expect(createJiraIssue('https://n8n.example.com', {
+      summary: 'Новая задача',
+      description: 'Описание',
+      priority: 'Нормальный',
+      issuetype: 'Задача',
+      needToUpdateSource: '',
+      slService: '',
+      productCatalog: '',
+    })).resolves.toEqual({ status: 'created', key: 'CREDITS-1' });
+  });
+
+  it('throws when webhook returns an error status even with HTTP 200', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'error', message: 'Jira rejected payload' }),
+    } as Response);
+
+    await expect(createJiraIssue('https://n8n.example.com', {
+      summary: 'Новая задача',
+      description: 'Описание',
+      priority: 'Нормальный',
+      issuetype: 'Задача',
+      needToUpdateSource: '',
+      slService: '',
+      productCatalog: '',
+    })).rejects.toThrow('Jira rejected payload');
+  });
+
+  it('throws when webhook returns a null key', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'created', key: null }),
+    } as Response);
+
+    await expect(createJiraIssue('https://n8n.example.com', {
+      summary: 'Новая задача',
+      description: 'Описание',
+      priority: 'Нормальный',
+      issuetype: 'Задача',
+      needToUpdateSource: '',
+      slService: '',
+      productCatalog: '',
+    })).rejects.toThrow('Webhook не подтвердил создание задачи в Jira');
+  });
+
+  it('throws on an empty create response', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    } as Response);
+
+    await expect(createJiraIssue('https://n8n.example.com', {
+      summary: 'Новая задача',
+      description: 'Описание',
+      priority: 'Нормальный',
+      issuetype: 'Задача',
+      needToUpdateSource: '',
+      slService: '',
+      productCatalog: '',
+    })).rejects.toThrow('Webhook не подтвердил создание задачи в Jira');
+  });
 });

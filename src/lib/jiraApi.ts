@@ -10,6 +10,7 @@ import type {
 } from '../types';
 import { getArrayField, getOptionalMeta, requestN8nJson, WEBHOOK_PATHS, type WebhookMeta } from './apiClient';
 import { normalizeJiraIssue } from './apiNormalizers';
+import { normalizeIssueKey } from './issueKeys';
 
 export interface JiraIssuesResponse {
   issues: JiraIssueShort[];
@@ -18,6 +19,18 @@ export interface JiraIssuesResponse {
 
 interface FetchJiraIssuesOptions {
   forceRefresh?: boolean;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getCreateIssueErrorMessage(data: Record<string, unknown>): string | null {
+  const candidates = [data.message, data.error, data.detail, data.details];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+  }
+  return null;
 }
 
 function buildJiraIssuesPath({ forceRefresh = false }: FetchJiraIssuesOptions = {}): string {
@@ -67,10 +80,30 @@ export async function createJiraIssue(
     epic: data.epic ?? (data.epicKey ? { key: data.epicKey } : undefined),
   };
 
-  return requestN8nJson<{ status: string; key: string }>(n8nBaseUrl, WEBHOOK_PATHS.jiraIssues, {
+  const result = await requestN8nJson<unknown>(n8nBaseUrl, WEBHOOK_PATHS.jiraIssues, {
     method: 'POST',
     body,
   });
+
+  if (!isRecord(result)) {
+    throw new Error('Неожиданный ответ webhook при создании задачи');
+  }
+
+  const status = typeof result.status === 'string' ? result.status.trim() : '';
+  const normalizedStatus = status.toLowerCase();
+  const key = normalizeIssueKey(result.key);
+  const message = getCreateIssueErrorMessage(result);
+  const successStatuses = new Set(['created', 'success', 'ok']);
+
+  if (normalizedStatus && !successStatuses.has(normalizedStatus)) {
+    throw new Error(message ?? 'Задача не создалась в Jira');
+  }
+
+  if (!key) {
+    throw new Error(message ?? 'Webhook не подтвердил создание задачи в Jira');
+  }
+
+  return { status: status || 'created', key };
 }
 
 export async function updateJiraIssue(

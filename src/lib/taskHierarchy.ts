@@ -1,4 +1,5 @@
 import type { JiraIssueShort } from '../types';
+import { compareIssueKeys, issueKeyRank, normalizeIssueKey } from './issueKeys';
 import { isEpicType } from './issueTypes';
 
 export const UNGROUPED_TASKS_ID = '__without_epic__';
@@ -47,11 +48,6 @@ export interface TaskHierarchyTableIssueRow extends TaskHierarchyTableBase {
 
 export type TaskHierarchyTableRow = TaskHierarchyTableGroupRow | TaskHierarchyTableIssueRow;
 
-function issueKeyRank(key: string): number {
-  const match = key.match(/(\d+)$/);
-  return match ? Number(match[1]) : 0;
-}
-
 function issueDateMs(issue: JiraIssueShort): number | null {
   const value = issue.updated ?? issue.created;
   if (!value) return null;
@@ -74,16 +70,16 @@ export function compareIssueFreshness(left: JiraIssueShort, right: JiraIssueShor
   const rightRank = issueKeyRank(right.key);
   if (leftRank !== rightRank) return rightRank - leftRank;
 
-  return right.key.localeCompare(left.key, 'ru', { numeric: true, sensitivity: 'base' });
+  return compareIssueKeys(left.key, right.key, 'desc');
 }
 
 function compareIssueKeyDesc(left: JiraIssueShort, right: JiraIssueShort): number {
-  return right.key.localeCompare(left.key, 'ru', { numeric: true, sensitivity: 'base' });
+  return compareIssueKeys(left.key, right.key, 'desc');
 }
 
 function relationKey(issue: JiraIssueShort, field: 'epic' | 'parent'): string | null {
-  if (field === 'epic') return issue.epic_key ?? issue.epic?.key ?? null;
-  return issue.parent_key ?? issue.parent?.key ?? null;
+  if (field === 'epic') return normalizeIssueKey(issue.epic_key ?? issue.epic?.key);
+  return normalizeIssueKey(issue.parent_key ?? issue.parent?.key);
 }
 
 function resolveIssueEpicKey(
@@ -206,7 +202,14 @@ function buildNestedGroupRows(members: JiraIssueShort[]): TaskHierarchyTableIssu
 
 export function buildTaskHierarchyGroups(issues: JiraIssueShort[]): TaskHierarchyGroup[] {
   const buckets = new Map<string, { epic: JiraIssueShort | null; members: JiraIssueShort[] }>();
-  const issueByKey = new Map(issues.map((issue) => [issue.key, issue]));
+  const issueByKey = new Map(
+    issues
+      .map((issue) => {
+        const key = normalizeIssueKey(issue.key);
+        return key ? [key, issue] as const : null;
+      })
+      .filter((entry): entry is readonly [string, JiraIssueShort] => entry !== null),
+  );
 
   const ensureBucket = (id: string) => {
     const existing = buckets.get(id);
@@ -218,7 +221,7 @@ export function buildTaskHierarchyGroups(issues: JiraIssueShort[]): TaskHierarch
 
   for (const issue of issues) {
     if (isEpicType(issue.issuetype)) {
-      ensureBucket(issue.key).epic = issue;
+      ensureBucket(normalizeIssueKey(issue.key) ?? issue.key).epic = issue;
       continue;
     }
 
@@ -249,13 +252,20 @@ export function buildTaskHierarchyGroups(issues: JiraIssueShort[]): TaskHierarch
     if (left.latestIssue && !right.latestIssue) return -1;
     if (!left.latestIssue && right.latestIssue) return 1;
 
-    return left.id.localeCompare(right.id, 'ru', { numeric: true, sensitivity: 'base' });
+    return compareIssueKeys(left.id, right.id);
   });
 }
 
 export function buildTaskHierarchyTableRows(issues: JiraIssueShort[]): TaskHierarchyTableRow[] {
   const buckets = new Map<string, { epic: JiraIssueShort | null; members: JiraIssueShort[] }>();
-  const issueByKey = new Map(issues.map((issue) => [issue.key, issue]));
+  const issueByKey = new Map(
+    issues
+      .map((issue) => {
+        const key = normalizeIssueKey(issue.key);
+        return key ? [key, issue] as const : null;
+      })
+      .filter((entry): entry is readonly [string, JiraIssueShort] => entry !== null),
+  );
 
   const ensureBucket = (id: string) => {
     const existing = buckets.get(id);
@@ -267,7 +277,7 @@ export function buildTaskHierarchyTableRows(issues: JiraIssueShort[]): TaskHiera
 
   for (const issue of issues) {
     if (isEpicType(issue.issuetype)) {
-      ensureBucket(issue.key).epic = issue;
+      ensureBucket(normalizeIssueKey(issue.key) ?? issue.key).epic = issue;
       continue;
     }
 
@@ -300,6 +310,6 @@ export function buildTaskHierarchyTableRows(issues: JiraIssueShort[]): TaskHiera
 
     const leftKey = left.epicKey ?? left.id;
     const rightKey = right.epicKey ?? right.id;
-    return rightKey.localeCompare(leftKey, 'ru', { numeric: true, sensitivity: 'base' });
+    return compareIssueKeys(leftKey, rightKey, 'desc');
   });
 }
